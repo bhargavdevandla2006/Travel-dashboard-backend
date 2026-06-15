@@ -2,6 +2,9 @@
   "name": "server",
   "version": "1.0.0",
   "main": "index.js",
+  "engines": {
+    "node": "22.x"
+  },
   "scripts": {
     "start": "node server.js"
   },
@@ -17,6 +20,6 @@
     "jsonwebtoken": "^9.0.3",
     "mongoose": "^9.6.1",
     "nodemon": "^3.1.14",
-    "sqlite3": "^6.0.1"
+    "sqlite3": "^5.1.7"
   }
 }
