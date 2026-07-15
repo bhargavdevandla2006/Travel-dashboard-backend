@@ -6,11 +6,12 @@ const jwt = require('jsonwebtoken')
 require("dotenv").config();
 const Razorpay = require("razorpay");
 const cookieParser = require("cookie-parser")
-const auth =  require("./middleware/auth")
+const auth = require("./middleware/auth")
 
 const app = express()
 app.use(cors({
-    origin: "https://travel-dashboard-sklj.vercel.app",
+    origin: ["http://localhost:5173",
+        "https://travel-dashboard-sklj.vercel.app"],
     credentials: true
 }));
 app.use(express.json());
@@ -23,7 +24,7 @@ const SECRET = "travel_secret_key"
 
 const razorpay = new Razorpay({
     key_id: process.env.RAZORPAY_KEY_ID,
-    key_secret:process.env.RAZORPAY_KEY_SECRET,
+    key_secret: process.env.RAZORPAY_KEY_SECRET,
 })
 
 db.run(` create table if not exists users(
@@ -86,15 +87,15 @@ VALUES
 );
 `);
 
-app.get("/destinations/:id", (req, res) =>{
-    const {id} = req.params;
+app.get("/destinations/:id", (req, res) => {
+    const { id } = req.params;
 
     db.get(
-        "select * from destinations where id=?",[id],
-        (err, row) =>{
-            if(err){
+        "select * from destinations where id=?", [id],
+        (err, row) => {
+            if (err) {
                 return res.status(500).json({
-                    message:"Error"
+                    message: "Error"
                 })
             }
             res.json(row)
@@ -104,62 +105,62 @@ app.get("/destinations/:id", (req, res) =>{
 })
 
 app.post("/create-order", async (req, res) => {
-  try {
-    const { amount } = req.body;
+    try {
+        const { amount } = req.body;
 
-    const options = {
-      amount: amount * 100,
-      currency: "INR",
-      receipt: `receipt_${Date.now()}`,
-    };
+        const options = {
+            amount: amount * 100,
+            currency: "INR",
+            receipt: `receipt_${Date.now()}`,
+        };
 
-    const order = await razorpay.orders.create(options);
+        const order = await razorpay.orders.create(options);
 
-    res.json({
-      success: true,
-      order,
-    });
+        res.json({
+            success: true,
+            order,
+        });
 
-  } catch (error) {
-    console.error("Razorpay Error:", error);
+    } catch (error) {
+        console.error("Razorpay Error:", error);
 
-    res.status(500).json({
-      success: false,
-      message: "Unable to create order",
-    });
-  }
+        res.status(500).json({
+            success: false,
+            message: "Unable to create order",
+        });
+    }
 });
 
-app.get('/destinations', async(req, res) =>{
+app.get('/destinations', async (req, res) => {
     db.all("select * from destinations",
-    [], 
-    (err, rows) =>{
-        if(err) {
-            return res.status(500).json({
-                message:"failed"
-            })
+        [],
+        (err, rows) => {
+            if (err) {
+                return res.status(500).json({
+                    message: "failed"
+                })
+            }
+            res.json(rows)
         }
-        res.json(rows)
-    }
     )
 })
 
-app.get('/trips', async (req,res)=>{
- db.all(
-    "select * from trips",
-    [],
-    (err, rows) =>{
-       if (err) {
-    console.log("SQLite Error:", err);
+app.get('/trips', async (req, res) => {
+    db.all(
+        "select * from trips",
+        [],
+        (err, rows) => {
+            if (err) {
+                console.log("SQLite Error:", err);
 
-    return res.status(500).json({
-        message: "Failed to fetch trips",
-        error: err.message
-    });
-}
-        res.json(rows)
-    }
- )
+                return res.status(500).json({
+                    message: "Failed to fetch trips",
+                    error: err.message
+                });
+            }
+            res.json(rows)
+        }
+    )
 })
 
 
@@ -191,16 +192,16 @@ app.post("/register", async (req, res) => {
                 }
             );
 
-            res.cookie("token",token, {
-                httpOnly:true,
-                secure:true,
-                sameSite:"none",
-                maxAge:7 * 24 * 60 * 60 * 1000
+            res.cookie("token", token, {
+                httpOnly: true,
+                secure: true,
+                sameSite: "none",
+                maxAge: 7 * 24 * 60 * 60 * 1000
             })
             res.json({
-                message:"Register succesfully"
+                message: "Register succesfully"
             })
-        
+
         }
     );
 });
@@ -237,14 +238,14 @@ app.post("/login", async (req, res) => {
                     expiresIn: "7d"
                 }
             );
-            res.cookie("token",  token, {
-                httpOnly:true,
-                secure:true,
-                sameSite:"none",
-                maxAge: 7 * 24 * 60 * 60 * 1000 
+            res.cookie("token", token, {
+                httpOnly: true,
+                secure: true,
+                sameSite: "none",
+                maxAge: 7 * 24 * 60 * 60 * 1000
             })
             res.json({
-                message:"Login succesfully"
+                message: "Login succesfully"
             })
         }
     )
@@ -277,40 +278,40 @@ app.get("/profile", auth, (req, res) => {
 });
 
 
-app.post("/logout", async(req, res) =>{
-res.clearCookie("token", {
-    httpOnly: true,
-    secure: true,
-    sameSite: "none",
-});
+app.post("/logout", async (req, res) => {
+    res.clearCookie("token", {
+        httpOnly: true,
+        secure: true,
+        sameSite: "none",
+    });
 
-res.json({
-    message:"Logout Done "
-})
+    res.json({
+        message: "Logout Done "
+    })
 })
 
 app.post('/trips', async (req, res) => {
     const { title, location, price, image } = req.body;
 
-db.run(
-    `
+    db.run(
+        `
     INSERT INTO trips(title, location, price, image)
     VALUES (?, ?, ?, ?)
     `,
-    [title, location, price, image],
-    function (err) {
-        if (err) {
-            return res.status(500).json({
-                message: "Failed to add trip"
+        [title, location, price, image],
+        function (err) {
+            if (err) {
+                return res.status(500).json({
+                    message: "Failed to add trip"
+                });
+            }
+
+            res.json({
+                id: this.lastID,
+                message: "Trip added successfully"
             });
         }
-
-        res.json({
-            id: this.lastID,
-            message: "Trip added successfully"
-        });
-    }
-);
+    );
 })
 
 
