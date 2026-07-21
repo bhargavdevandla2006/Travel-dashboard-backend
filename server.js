@@ -96,6 +96,16 @@ CREATE TABLE IF NOT EXISTS destinations (
 `);
 
 db.run(`
+    create table if not exists followers (
+    id integer primary key autoincrement,
+    follower_id integer,
+    following_id integet,
+    created_at datetime default current_timestamp,
+    unique(follower_id,  following_id)
+    )
+    `);
+
+db.run(`
 INSERT OR IGNORE INTO destinations (id, name, country, image)
 VALUES
 (
@@ -188,6 +198,61 @@ app.get('/destinations', async (req, res) => {
     )
 })
 
+app.get('/users', (req, res) =>{
+    db.all(`
+        select id, name, city, state, country, photo from users order by id desc
+        `,
+        [],
+        (err, rows) =>{
+            if(err) {
+                return res.status(500).json({
+                    message:"Database error"
+                })
+            }
+            res.json(rows)  
+        }
+    )
+})
+
+app.get("/users/:id", (req, res) => {
+
+    const { id } = req.params;
+
+    db.get(
+        `
+        SELECT
+            id,
+            name,
+            email,
+            city,
+            state,
+            country,
+            photo
+        FROM users
+        WHERE id = ?
+        `,
+        [id],
+        (err, row) => {
+
+            if (err) {
+                return res.status(500).json({
+                    message: "Database Error"
+                });
+            }
+
+            if (!row) {
+                return res.status(404).json({
+                    message: "User Not Found"
+                });
+            }
+
+            res.json(row);
+
+        }
+    );
+
+});
+
 app.get('/trips', async (req, res) => {
     db.all(
         "select * from trips",
@@ -241,9 +306,7 @@ app.post("/register", async (req, res) => {
                 sameSite: process.env.NODE_ENV === "production" ? "none" : "lax",
                 maxAge: 7 * 24 * 60 * 60 * 1000
             })
-            // In development add a readable cookie for debugging so frontend can
-            // verify the cookie was received. This is NOT used for auth and
-            // remains HttpOnly=false only in non-production environments.
+            
             if (process.env.NODE_ENV !== "production") {
                 res.cookie("dev_token", token, {
                     httpOnly: false,
@@ -419,7 +482,82 @@ app.post('/trips', async (req, res) => {
     );
 })
 
+app.post('/follow/:id', auth, (req, res) => {
+    const followerId = req.user.id;
+    const followingId = req.params.id;
 
+    if (followerId == followingId) {
+        return res.status(400).json({
+            message: "You cant follow yourself brooo"
+        });
+    }
+
+    db.run(
+        `
+        insert into followers (follower_id, following_id)
+        values(?, ?)
+        `,
+        [followerId, followingId],
+        function (err) {
+            if (err) {
+                return res.status(400).json({
+                    message: "You're already following this user"
+                });
+            }
+            res.json({
+                message: "Followed successfully"
+            });
+        }
+    );
+});
+
+app.delete('/unfollow/:id', auth, (req, res) => {
+    const followerId = req.user.id;
+    const followingId = req.params.id;
+
+    db.run(
+        `
+        delete from followers where follower_id = ? and following_id = ?
+        `,
+        [followerId, followingId],
+        function (err) {
+            if (err) {
+                return res.status(500).json({
+                    message: "You cant unfollow"
+                });
+            }
+            res.json({
+                message: "Unfollowed successfully"
+            });
+        }
+    );
+});
+
+ app.get('/follow-status/:id',  auth, (req, res) =>{
+    const followerId = req.user.id;
+    const followingId = req.params.id;
+
+    db.get(`
+        select * from followers
+        where follower_id = ? and following_id = ?
+
+        `, [followerId,  followingId],
+
+        (err, row) => {
+          if(err) {
+            res.status(500).json({
+                message:"error broooo"
+            })
+          }
+
+          res.json({
+            following: !! row
+          })
+        }
+    
+    )
+ })
+ 
 app.get("/", async (req, res) => {
     res.send("Backend is running bruuuuu")
 })
