@@ -36,10 +36,17 @@ const db = new sqlite3.Database(path.join(__dirname, 'travel.db'));
 
 const SECRET = "travel_secret_key"
 
-const razorpay = new Razorpay({
-    key_id: process.env.RAZORPAY_KEY_ID,
-    key_secret: process.env.RAZORPAY_KEY_SECRET,
-})
+let razorpay;
+try {
+    razorpay = new Razorpay({
+        key_id: process.env.RAZORPAY_KEY_ID,
+        key_secret: process.env.RAZORPAY_KEY_SECRET,
+    })
+} catch (error) {
+    console.warn('Warning: Razorpay initialization failed. Payments may not work.', error.message);
+}
+
+
 
 db.serialize(() => {
     db.run(`
@@ -83,7 +90,8 @@ db.run(` create table if not exists trips (
     title TEXT,
     location TEXT,
     price TEXT,
-    image TEXT
+    image TEXT,
+    user_id INTEGER
     )`)
 
 db.run(`
@@ -104,6 +112,20 @@ db.run(`
     unique(follower_id,  following_id)
     )
     `);
+
+db.run(`
+CREATE TABLE IF NOT EXISTS likes(
+
+id INTEGER PRIMARY KEY AUTOINCREMENT,
+
+user_id INTEGER,
+
+trip_id INTEGER,
+
+UNIQUE(user_id, trip_id)
+
+)
+`);
 
 db.run(`
 INSERT OR IGNORE INTO destinations (id, name, country, image)
@@ -159,6 +181,13 @@ app.get("/destinations/:id", (req, res) => {
 
 app.post("/create-order", async (req, res) => {
     try {
+        if (!razorpay) {
+            return res.status(500).json({
+                success: false,
+                message: "Razorpay not configured",
+            });
+        }
+
         const { amount } = req.body;
 
         const options = {
@@ -184,6 +213,39 @@ app.post("/create-order", async (req, res) => {
     }
 });
 
+app.get("/followers-count/:id", (req, res) => {
+    db.get(`
+        select count(*) as count from followers where following_id = ? 
+        `, [req.params.id],
+
+        (err, row) => {
+            if (err) {
+                return res.status(500).json({
+                    message: "Database err broo"
+                })
+            }
+
+            res.json(row)
+        }
+    )
+})
+
+app.get("/following-count/:id", (req, res) => {
+    db.get(`
+       select count(*) as count from following where follower_id = ?  
+        `, [req.params.id],
+
+        (err, row) => {
+            if (err) {
+                return res.status(500).json({
+                    message: "Database err"
+                })
+            }
+            res.json(row)
+        }
+    )
+})
+
 app.get('/destinations', async (req, res) => {
     db.all("select * from destinations",
         [],
@@ -198,18 +260,36 @@ app.get('/destinations', async (req, res) => {
     )
 })
 
-app.get('/users', (req, res) =>{
+app.get('/users', (req, res) => {
     db.all(`
         select id, name, city, state, country, photo from users order by id desc
         `,
         [],
-        (err, rows) =>{
-            if(err) {
+        (err, rows) => {
+            if (err) {
                 return res.status(500).json({
-                    message:"Database error"
+                    message: "Database error"
                 })
             }
-            res.json(rows)  
+            res.json(rows)
+        }
+    )
+})
+
+app.get("/search-users", (req, res) => {
+    const search = req.query.search || ""
+    db.all(`
+      select id, name, city,  state, country, photo from users  
+      where name like ? 
+        `, [`%${search}%`],
+
+        (err, rows) => {
+            if (err) {
+                return res.status(500).json({
+                    message: "Database err"
+                })
+            }
+            res.json(rows)
         }
     )
 })
@@ -271,6 +351,32 @@ app.get('/trips', async (req, res) => {
     )
 })
 
+app.get("/users/:id/trips", (req, res) => {
+
+    db.all(
+        `
+        SELECT *
+        FROM trips
+        WHERE user_id = ?
+        `,
+        [req.params.id],
+
+        (err, rows) => {
+
+            if (err) {
+                return res.status(500).json({
+                    message: "Database Error"
+                });
+            }
+
+            res.json(rows);
+
+        }
+
+    );
+
+});
+
 
 app.post("/register", async (req, res) => {
 
@@ -306,7 +412,7 @@ app.post("/register", async (req, res) => {
                 sameSite: process.env.NODE_ENV === "production" ? "none" : "lax",
                 maxAge: 7 * 24 * 60 * 60 * 1000
             })
-            
+
             if (process.env.NODE_ENV !== "production") {
                 res.cookie("dev_token", token, {
                     httpOnly: false,
@@ -458,15 +564,15 @@ app.post("/logout", async (req, res) => {
     })
 })
 
-app.post('/trips', async (req, res) => {
-    const { title, location, price, image } = req.body;
+app.post('/trips', auth, (req, res) => {
+    const { title, location, price, image, user_id } = req.body;
 
     db.run(
         `
     INSERT INTO trips(title, location, price, image)
-    VALUES (?, ?, ?, ?)
+    VALUES (?, ?, ?, ?, ?)
     `,
-        [title, location, price, image],
+        [title, location, price, image, user_id],
         function (err) {
             if (err) {
                 return res.status(500).json({
@@ -533,7 +639,7 @@ app.delete('/unfollow/:id', auth, (req, res) => {
     );
 });
 
- app.get('/follow-status/:id',  auth, (req, res) =>{
+app.get('/follow-status/:id', auth, (req, res) => {
     const followerId = req.user.id;
     const followingId = req.params.id;
 
@@ -541,29 +647,132 @@ app.delete('/unfollow/:id', auth, (req, res) => {
         select * from followers
         where follower_id = ? and following_id = ?
 
-        `, [followerId,  followingId],
+        `, [followerId, followingId],
 
         (err, row) => {
-          if(err) {
-            res.status(500).json({
-                message:"error broooo"
-            })
-          }
+            if (err) {
+                res.status(500).json({
+                    message: "error broooo"
+                })
+            }
 
-          res.json({
-            following: !! row
+            res.json({
+                following: !!row
+            })
+        }
+
+    )
+})
+
+app.post("/like/:id",  auth, (req, res) =>{
+    
+    db.run(`
+        insert into likes(user_id, trip_id)
+        values(?, ?)
+        `,
+    [req.user.id, req.params.id],
+
+    function(err) {
+        if(err) {
+          return res.status(500).json({
+            message:"Already Liked broo"
           })
         }
-    
+        res.json({
+            message:"Liked successfully"
+        })
+    }
     )
- })
- 
+})
+
+app.delete("/unlike/:id", auth, (req, res) =>{
+
+    db.run(`
+     delete from likes 
+     where user_id = ? and trip_id = ? 
+        `, [req.user.id, req.params.id],
+
+        function(err){
+            if(err) {
+                return res.status(500).json({
+                    message: "Database error"
+                })
+            }
+
+            res.json({
+                message:"Unliked successfully"
+            })
+        }
+    )
+})
+
+app.get("/likes-count/:id", (req, res)=>{
+    db.get(`
+       select count(*) as count 
+       from likes 
+       where trip_id=?
+        `,[req.params.id],
+
+        (err, row) =>{
+            if(err){
+                return res.status(500).json({
+                    message:"DB err"
+                })
+            }
+            res.json(row)
+        }
+
+    )
+})
+
+app.get("/check-like/:id", auth, (req, res) => {
+
+    db.get(
+        `
+        SELECT *
+        FROM likes
+        WHERE user_id = ?
+        AND trip_id = ?
+        `,
+        [req.user.id, req.params.id],
+
+        (err, row) => {
+
+            if (err) {
+
+                return res.status(500).json({
+                    message: "Database Error"
+                });
+
+            }
+
+            res.json({
+                liked: !!row
+            });
+
+        }
+
+    );
+
+});
+
 app.get("/", async (req, res) => {
     res.send("Backend is running bruuuuu")
 })
 
 const PORT = process.env.PORT || 3000;
 
-app.listen(PORT, () => {
+const server = app.listen(PORT, () => {
     console.log(`Server running on port ${PORT}`);
+});
+
+
+process.on('uncaughtException', (err) => {
+    console.error('Uncaught Exception:', err.message);
+    process.exit(1);
+});
+
+process.on('unhandledRejection', (reason, promise) => {
+    console.error('Unhandled Rejection at:', promise, 'reason:', reason);
+    process.exit(1);
 });
