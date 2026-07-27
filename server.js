@@ -128,6 +128,22 @@ UNIQUE(user_id, trip_id)
 `);
 
 db.run(`
+CREATE TABLE IF NOT EXISTS comments(
+
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+
+    user_id INTEGER,
+
+    trip_id INTEGER,
+
+    comment TEXT,
+
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+
+)
+`);
+
+db.run(`
 INSERT OR IGNORE INTO destinations (id, name, country, image)
 VALUES
 (
@@ -749,6 +765,73 @@ app.get("/check-like/:id", auth, (req, res) => {
             res.json({
                 liked: !!row
             });
+
+        }
+
+    );
+
+});
+
+app.post("/comments/:tripId", auth, (req, res) => {
+
+    const { comment } = req.body;
+
+    db.run(
+        `
+        INSERT INTO comments(user_id, trip_id, comment)
+        VALUES(?, ?, ?)
+        `,
+        [req.user.id, req.params.tripId, comment],
+
+        function(err) {
+
+            if (err) {
+
+                return res.status(500).json({
+                    message: "Database Error"
+                });
+
+            }
+
+            res.json({
+                message: "Comment Added Successfully"
+            });
+
+        }
+
+    );
+
+});
+
+app.get("/comments/:tripId", (req, res) => {
+
+    db.all(
+        `
+        SELECT
+            comments.id,
+            comments.comment,
+            comments.created_at,
+            users.name,
+            users.photo
+        FROM comments
+        JOIN users
+        ON comments.user_id = users.id
+        WHERE comments.trip_id = ?
+        ORDER BY comments.created_at DESC
+        `,
+        [req.params.tripId],
+
+        (err, rows) => {
+
+            if (err) {
+
+                return res.status(500).json({
+                    message: "Database Error"
+                });
+
+            }
+
+            res.json(rows);
 
         }
 
