@@ -801,7 +801,8 @@ app.post("/comments/:tripId", auth, (req, res) => {
             }
 
             res.json({
-                message: "Comment Added"
+                message: "Comment Added",
+                 loggedUserId: req.user.id
             });
 
         }
@@ -877,6 +878,34 @@ app.get("/comments-debug", (req, res) => {
         (err, rows) => {
 
             if(err){
+                return res.status(500).json(err);
+            }
+
+            res.json(rows);
+
+        }
+    );
+
+});
+
+app.get("/comments-debug", (req, res) => {
+
+    db.all(
+        `
+        SELECT
+            comments.id,
+            comments.user_id,
+            comments.trip_id,
+            comments.comment,
+            users.name
+        FROM comments
+        JOIN users
+        ON comments.user_id = users.id
+        `,
+        [],
+        (err, rows) => {
+
+            if (err) {
                 return res.status(500).json(err);
             }
 
