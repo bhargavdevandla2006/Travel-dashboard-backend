@@ -178,6 +178,10 @@ VALUES
 );
 `);
 
+app.get("/", (req, res) => {
+    res.send("Backend is running bruuuuu")
+})
+
 app.get("/destinations/:id", (req, res) => {
     const { id } = req.params;
 
@@ -586,7 +590,7 @@ app.post('/trips', auth, (req, res) => {
     db.run(
         `
     INSERT INTO trips(title, location, price, image)
-    VALUES (?, ?, ?, ?, ?)
+    VALUES (?, ?, ?, ?)
     `,
         [title, location, price, image, user_id],
         function (err) {
@@ -774,6 +778,8 @@ app.get("/check-like/:id", auth, (req, res) => {
 
 app.post("/comments/:tripId", auth, (req, res) => {
 
+    console.log("Logged in user id:", req.user.id);
+
     const { comment } = req.body;
 
     db.run(
@@ -781,20 +787,21 @@ app.post("/comments/:tripId", auth, (req, res) => {
         INSERT INTO comments(user_id, trip_id, comment)
         VALUES(?, ?, ?)
         `,
-        [req.user.id, req.params.tripId, comment],
-
-        function(err) {
+        [
+            req.user.id,
+            req.params.tripId,
+            comment
+        ],
+        (err) => {
 
             if (err) {
-
                 return res.status(500).json({
                     message: "Database Error"
                 });
-
             }
 
             res.json({
-                message: "Comment Added Successfully"
+                message: "Comment Added"
             });
 
         }
@@ -835,6 +842,47 @@ app.get("/comments/:tripId", (req, res) => {
 
         }
 
+    );
+
+});
+
+app.get("/all-users", (req, res) => {
+
+    db.all(
+        "SELECT id, name, email FROM users",
+        [],
+        (err, rows) => {
+
+            if (err) {
+                return res.status(500).json({
+                    message: "Database Error"
+                });
+            }
+
+            res.json(rows);
+
+        }
+    );
+
+});
+
+app.get("/comments-debug", (req, res) => {
+
+    db.all(
+        `
+        SELECT *
+        FROM comments
+        `,
+        [],
+        (err, rows) => {
+
+            if(err){
+                return res.status(500).json(err);
+            }
+
+            res.json(rows);
+
+        }
     );
 
 });
