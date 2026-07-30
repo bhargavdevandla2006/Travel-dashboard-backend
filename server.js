@@ -428,11 +428,10 @@ app.post("/register", async (req, res) => {
 
             res.cookie("token", token, {
                 httpOnly: true,
-                secure: process.env.NODE_ENV === "production",
-                sameSite: process.env.NODE_ENV === "production" ? "none" : "lax",
-                maxAge: 7 * 24 * 60 * 60 * 1000
-            })
-
+                secure: true,
+                sameSite: "none",
+                maxAge: 7 * 24 * 60 * 60 * 1000,
+            });
             if (process.env.NODE_ENV !== "production") {
                 res.cookie("dev_token", token, {
                     httpOnly: false,
@@ -450,28 +449,34 @@ app.post("/register", async (req, res) => {
 });
 
 app.post("/login", async (req, res) => {
+
     const { email, password } = req.body;
 
+    console.log("Email entered:", email);
+
     db.get(
-        "select * from users where email=?",
+        "SELECT * FROM users WHERE email=?",
         [email],
 
         async (err, user) => {
+
             if (!user) {
                 return res.status(400).json({
                     message: "Invalid Email"
-                })
+                });
             }
-            const isMatch = await bcrypt.compare(
-                password,
-                user.password
-            );
-            if (!isMatch) {
 
+            console.log("User found:", user.id, user.name, user.email);
+
+            const isMatch = await bcrypt.compare(password, user.password);
+
+            if (!isMatch) {
                 return res.status(400).json({
                     message: "Invalid password"
-                })
+                });
             }
+
+            console.log("Logging in user:", user.id);
             const token = jwt.sign(
                 {
                     id: user.id
@@ -483,10 +488,10 @@ app.post("/login", async (req, res) => {
             );
             res.cookie("token", token, {
                 httpOnly: true,
-                secure: process.env.NODE_ENV === "production",
-                sameSite: process.env.NODE_ENV === "production" ? "none" : "lax",
-                maxAge: 7 * 24 * 60 * 60 * 1000
-            })
+                secure: true,
+                sameSite: "none",
+                maxAge: 7 * 24 * 60 * 60 * 1000,
+            });
             if (process.env.NODE_ENV !== "production") {
                 res.cookie("dev_token", token, {
                     httpOnly: false,
@@ -684,59 +689,59 @@ app.get('/follow-status/:id', auth, (req, res) => {
     )
 })
 
-app.post("/like/:id",  auth, (req, res) =>{
-    
+app.post("/like/:id", auth, (req, res) => {
+
     db.run(`
         insert into likes(user_id, trip_id)
         values(?, ?)
         `,
-    [req.user.id, req.params.id],
+        [req.user.id, req.params.id],
 
-    function(err) {
-        if(err) {
-          return res.status(500).json({
-            message:"Already Liked broo"
-          })
+        function (err) {
+            if (err) {
+                return res.status(500).json({
+                    message: "Already Liked broo"
+                })
+            }
+            res.json({
+                message: "Liked successfully"
+            })
         }
-        res.json({
-            message:"Liked successfully"
-        })
-    }
     )
 })
 
-app.delete("/unlike/:id", auth, (req, res) =>{
+app.delete("/unlike/:id", auth, (req, res) => {
 
     db.run(`
      delete from likes 
      where user_id = ? and trip_id = ? 
         `, [req.user.id, req.params.id],
 
-        function(err){
-            if(err) {
+        function (err) {
+            if (err) {
                 return res.status(500).json({
                     message: "Database error"
                 })
             }
 
             res.json({
-                message:"Unliked successfully"
+                message: "Unliked successfully"
             })
         }
     )
 })
 
-app.get("/likes-count/:id", (req, res)=>{
+app.get("/likes-count/:id", (req, res) => {
     db.get(`
        select count(*) as count 
        from likes 
        where trip_id=?
-        `,[req.params.id],
+        `, [req.params.id],
 
-        (err, row) =>{
-            if(err){
+        (err, row) => {
+            if (err) {
                 return res.status(500).json({
-                    message:"DB err"
+                    message: "DB err"
                 })
             }
             res.json(row)
@@ -778,35 +783,39 @@ app.get("/check-like/:id", auth, (req, res) => {
 
 app.post("/comments/:tripId", auth, (req, res) => {
 
-    console.log("Logged in user id:", req.user.id);
-
-    const { comment } = req.body;
+    console.log("========== COMMENT DEBUG ==========");
+    console.log("Cookie:", req.cookies.token);
+    console.log("req.user:", req.user);
+    console.log("Comment:", req.body.comment);
+    console.log("Trip:", req.params.tripId);
 
     db.run(
         `
         INSERT INTO comments(user_id, trip_id, comment)
-        VALUES(?, ?, ?)
+        VALUES (?, ?, ?)
         `,
         [
             req.user.id,
             req.params.tripId,
-            comment
+            req.body.comment
         ],
-        (err) => {
+        function (err) {
 
             if (err) {
+                console.log(err);
                 return res.status(500).json({
                     message: "Database Error"
                 });
             }
 
+            console.log("Inserted row id:", this.lastID);
+
             res.json({
                 message: "Comment Added",
-                 loggedUserId: req.user.id
+                loggedUserId: req.user.id
             });
 
         }
-
     );
 
 });
@@ -877,7 +886,7 @@ app.get("/comments-debug", (req, res) => {
         [],
         (err, rows) => {
 
-            if(err){
+            if (err) {
                 return res.status(500).json(err);
             }
 
