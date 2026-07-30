@@ -107,7 +107,7 @@ db.run(`
     create table if not exists followers (
     id integer primary key autoincrement,
     follower_id integer,
-    following_id integet,
+    following_id integer,
     created_at datetime default current_timestamp,
     unique(follower_id,  following_id)
     )
@@ -178,9 +178,6 @@ VALUES
 );
 `);
 
-app.get("/", (req, res) => {
-    res.send("Backend is running bruuuuu")
-})
 
 app.get("/destinations/:id", (req, res) => {
     const { id } = req.params;
@@ -250,21 +247,6 @@ app.get("/followers-count/:id", (req, res) => {
     )
 })
 
-app.get("/following-count/:id", (req, res) => {
-    db.get(`
-       select count(*) as count from following where follower_id = ?  
-        `, [req.params.id],
-
-        (err, row) => {
-            if (err) {
-                return res.status(500).json({
-                    message: "Database err"
-                })
-            }
-            res.json(row)
-        }
-    )
-})
 
 app.get('/destinations', async (req, res) => {
     db.all("select * from destinations",
@@ -428,8 +410,8 @@ app.post("/register", async (req, res) => {
 
             res.cookie("token", token, {
                 httpOnly: true,
-                secure: true,
-                sameSite: "none",
+                secure: process.env.NODE_ENV === "production",
+                sameSite: process.env.NODE_ENV === "production" ? "none" : "lax",
                 maxAge: 7 * 24 * 60 * 60 * 1000,
             });
             if (process.env.NODE_ENV !== "production") {
@@ -488,8 +470,8 @@ app.post("/login", async (req, res) => {
             );
             res.cookie("token", token, {
                 httpOnly: true,
-                secure: true,
-                sameSite: "none",
+                secure: process.env.NODE_ENV === "production",
+                sameSite: process.env.NODE_ENV === "production" ? "none" : "lax",
                 maxAge: 7 * 24 * 60 * 60 * 1000,
             });
             if (process.env.NODE_ENV !== "production") {
@@ -594,10 +576,16 @@ app.post('/trips', auth, (req, res) => {
 
     db.run(
         `
-    INSERT INTO trips(title, location, price, image)
-    VALUES (?, ?, ?, ?)
+    INSERT INTO trips(title, location, price, image, user_id)
+VALUES (?, ?, ?, ?, ?)
     `,
-        [title, location, price, image, user_id],
+        [
+            title,
+            location,
+            price,
+            image,
+            req.user.id
+        ],
         function (err) {
             if (err) {
                 return res.status(500).json({
@@ -688,6 +676,29 @@ app.get('/follow-status/:id', auth, (req, res) => {
 
     )
 })
+
+app.get("/following-count/:id", (req, res) => {
+
+    db.get(`
+        SELECT COUNT(*) AS count
+        FROM followers
+        WHERE follower_id = ?
+    `,
+        [req.params.id],
+
+        (err, row) => {
+
+            if (err) {
+                return res.status(500).json({
+                    message: "Database error"
+                });
+            }
+
+            res.json(row);
+
+        });
+
+});
 
 app.post("/like/:id", auth, (req, res) => {
 
@@ -897,33 +908,6 @@ app.get("/comments-debug", (req, res) => {
 
 });
 
-app.get("/comments-debug", (req, res) => {
-
-    db.all(
-        `
-        SELECT
-            comments.id,
-            comments.user_id,
-            comments.trip_id,
-            comments.comment,
-            users.name
-        FROM comments
-        JOIN users
-        ON comments.user_id = users.id
-        `,
-        [],
-        (err, rows) => {
-
-            if (err) {
-                return res.status(500).json(err);
-            }
-
-            res.json(rows);
-
-        }
-    );
-
-});
 
 app.get("/", async (req, res) => {
     res.send("Backend is running bruuuuu")
