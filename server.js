@@ -74,13 +74,45 @@ db.serialize(() => {
             ["state", "TEXT DEFAULT 'Telangana'"],
             ["country", "TEXT DEFAULT 'India'"],
             ["photo", "TEXT DEFAULT 'https://i.pravatar.cc/150'"],
+            ["updated_at", "TEXT"]
         ];
 
-        migrations.forEach(([columnName, definition]) => {
-            if (!existingColumns.has(columnName)) {
-                db.run(`ALTER TABLE users ADD COLUMN ${columnName} ${definition}`);
+        let updatedAtColumnAdded = false;
+
+        const addNextColumn = (index = 0) => {
+            if (index >= migrations.length) {
+                if (updatedAtColumnAdded) {
+                    db.run(
+                        `UPDATE users SET updated_at = datetime('now') WHERE updated_at IS NULL`,
+                        (err) => {
+                            if (err) {
+                                console.error('Error updating updated_at values', err);
+                            }
+                        }
+                    );
+                }
+                return;
             }
-        });
+
+            const [columnName, definition] = migrations[index];
+            if (!existingColumns.has(columnName)) {
+                db.run(`ALTER TABLE users ADD COLUMN ${columnName} ${definition}`, (err) => {
+                    if (err) {
+                        console.error(`Error adding column ${columnName}:`, err.message);
+                    } else if (columnName === "updated_at") {
+                        updatedAtColumnAdded = true;
+                    }
+                    addNextColumn(index + 1);
+                });
+            } else {
+                if (columnName === "updated_at") {
+                    updatedAtColumnAdded = true;
+                }
+                addNextColumn(index + 1);
+            }
+        };
+
+        addNextColumn();
     });
 });
 
@@ -264,7 +296,7 @@ app.get('/destinations', async (req, res) => {
 
 app.get('/users', (req, res) => {
     db.all(`
-        select id, name, city, state, country, photo from users order by id desc
+        select id, name, city, state, country, photo from users order by updated_at desc, id desc
         `,
         [],
         (err, rows) => {
@@ -281,8 +313,9 @@ app.get('/users', (req, res) => {
 app.get("/search-users", (req, res) => {
     const search = req.query.search || ""
     db.all(`
-      select id, name, city,  state, country, photo from users  
-      where name like ? 
+      select id, name, city, state, country, photo from users
+      where name like ?
+      order by updated_at desc, id desc
         `, [`%${search}%`],
 
         (err, rows) => {
@@ -533,7 +566,8 @@ app.put('/profile', auth, (req, res) => {
         city=?,
         state=?,
         country=?,
-        photo =?
+        photo =?,
+        updated_at = CURRENT_TIMESTAMP
     
         where id = ?
         `,
