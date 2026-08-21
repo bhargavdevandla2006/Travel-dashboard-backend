@@ -41,8 +41,6 @@ const allowedOrigins = [
 app.use(
     cors({
         origin: (origin, callback) => {
-
-            // Postman / server-to-server
             if (!origin) {
                 return callback(null, true);
             }
@@ -74,7 +72,6 @@ const dbPath = path.join(__dirname, "travel.db");
 const db = new sqlite3.Database(
     dbPath,
     (err) => {
-
         if (err) {
             console.error(
                 "❌ SQLite connection failed:",
@@ -86,7 +83,6 @@ const db = new sqlite3.Database(
                 dbPath
             );
         }
-
     }
 );
 
@@ -100,9 +96,7 @@ if (
     process.env.RAZORPAY_KEY_ID &&
     process.env.RAZORPAY_KEY_SECRET
 ) {
-
     try {
-
         razorpay = new Razorpay({
             key_id: process.env.RAZORPAY_KEY_ID,
             key_secret: process.env.RAZORPAY_KEY_SECRET,
@@ -111,35 +105,27 @@ if (
         console.log("✅ Razorpay initialized");
 
     } catch (error) {
-
         console.error(
             "❌ Razorpay initialization failed:",
             error.message
         );
-
     }
-
 } else {
-
     console.log(
         "⚠️ Razorpay keys not configured"
     );
-
 }
 
 /* =========================================================
-   DB HELPERS
+   DATABASE HELPERS
 ========================================================= */
 
 function run(sql, params = []) {
-
     return new Promise((resolve, reject) => {
-
         db.run(
             sql,
             params,
             function (err) {
-
                 if (err) {
                     reject(err);
                 } else {
@@ -148,56 +134,41 @@ function run(sql, params = []) {
                         changes: this.changes,
                     });
                 }
-
             }
         );
-
     });
-
 }
 
 function all(sql, params = []) {
-
     return new Promise((resolve, reject) => {
-
         db.all(
             sql,
             params,
             (err, rows) => {
-
                 if (err) {
                     reject(err);
                 } else {
                     resolve(rows);
                 }
-
             }
         );
-
     });
-
 }
 
 function get(sql, params = []) {
-
     return new Promise((resolve, reject) => {
-
         db.get(
             sql,
             params,
             (err, row) => {
-
                 if (err) {
                     reject(err);
                 } else {
                     resolve(row);
                 }
-
             }
         );
-
     });
-
 }
 
 /* =========================================================
@@ -216,19 +187,13 @@ async function initializeDatabase() {
 
     await run(`
         CREATE TABLE IF NOT EXISTS users (
-
             id INTEGER PRIMARY KEY AUTOINCREMENT,
-
             name TEXT,
-
             email TEXT UNIQUE,
-
             password TEXT,
 
             city TEXT DEFAULT 'Hyderabad',
-
             state TEXT DEFAULT 'Telangana',
-
             country TEXT DEFAULT 'India',
 
             photo TEXT DEFAULT 'https://i.pravatar.cc/150',
@@ -236,31 +201,19 @@ async function initializeDatabase() {
             updated_at TEXT,
 
             instagram TEXT DEFAULT '',
-
             facebook TEXT DEFAULT '',
-
             twitter TEXT DEFAULT '',
-
             linkedin TEXT DEFAULT '',
-
             youtube TEXT DEFAULT '',
-
             tiktok TEXT DEFAULT '',
+            website TEXT DEFAULT '',
 
-            website TEXT DEFAULT ''
-
+            is_private INTEGER DEFAULT 0
         )
     `);
 
-    console.log("✅ users table ready");
-
-    /* =====================================================
-       USERS MIGRATIONS
-    ===================================================== */
-
-    const userColumns = await all(
-        "PRAGMA table_info(users)"
-    );
+    const userColumns =
+        await all("PRAGMA table_info(users)");
 
     const existingUserColumns =
         new Set(
@@ -271,79 +224,36 @@ async function initializeDatabase() {
 
     const userMigrations = [
 
-        [
-            "city",
-            "TEXT DEFAULT 'Hyderabad'"
-        ],
+        ["city", "TEXT DEFAULT 'Hyderabad'"],
 
-        [
-            "state",
-            "TEXT DEFAULT 'Telangana'"
-        ],
+        ["state", "TEXT DEFAULT 'Telangana'"],
 
-        [
-            "country",
-            "TEXT DEFAULT 'India'"
-        ],
+        ["country", "TEXT DEFAULT 'India'"],
 
         [
             "photo",
             "TEXT DEFAULT 'https://i.pravatar.cc/150'"
         ],
 
-        [
-            "updated_at",
-            "TEXT"
-        ],
+        ["updated_at", "TEXT"],
 
-        [
-            "instagram",
-            "TEXT DEFAULT ''"
-        ],
+        ["instagram", "TEXT DEFAULT ''"],
+        ["facebook", "TEXT DEFAULT ''"],
+        ["twitter", "TEXT DEFAULT ''"],
+        ["linkedin", "TEXT DEFAULT ''"],
+        ["youtube", "TEXT DEFAULT ''"],
+        ["tiktok", "TEXT DEFAULT ''"],
+        ["website", "TEXT DEFAULT ''"],
 
-        [
-            "facebook",
-            "TEXT DEFAULT ''"
-        ],
-
-        [
-            "twitter",
-            "TEXT DEFAULT ''"
-        ],
-
-        [
-            "linkedin",
-            "TEXT DEFAULT ''"
-        ],
-
-        [
-            "youtube",
-            "TEXT DEFAULT ''"
-        ],
-
-        [
-            "tiktok",
-            "TEXT DEFAULT ''"
-        ],
-
-        [
-            "website",
-            "TEXT DEFAULT ''"
-        ],
-
+        ["is_private", "INTEGER DEFAULT 0"],
     ];
 
     for (
         const [column, definition]
         of userMigrations
     ) {
-
-        if (
-            !existingUserColumns.has(column)
-        ) {
-
+        if (!existingUserColumns.has(column)) {
             try {
-
                 await run(`
                     ALTER TABLE users
                     ADD COLUMN ${column} ${definition}
@@ -354,16 +264,12 @@ async function initializeDatabase() {
                 );
 
             } catch (error) {
-
                 console.error(
-                    `❌ Failed adding users.${column}:`,
+                    `❌ Failed adding ${column}:`,
                     error.message
                 );
-
             }
-
         }
-
     }
 
     await run(`
@@ -378,68 +284,14 @@ async function initializeDatabase() {
 
     await run(`
         CREATE TABLE IF NOT EXISTS trips (
-
             id INTEGER PRIMARY KEY AUTOINCREMENT,
-
             title TEXT,
-
             location TEXT,
-
             price TEXT,
-
             image TEXT,
-
             user_id INTEGER
-
         )
     `);
-
-    console.log("✅ trips table exists");
-
-    /* =====================================================
-       TRIPS MIGRATION
-    ===================================================== */
-
-    const tripColumns = await all(
-        "PRAGMA table_info(trips)"
-    );
-
-    const existingTripColumns =
-        new Set(
-            tripColumns.map(
-                column => column.name
-            )
-        );
-
-    console.log(
-        "📋 Existing trips columns:",
-        [...existingTripColumns]
-    );
-
-    if (
-        !existingTripColumns.has("user_id")
-    ) {
-
-        console.log(
-            "⚠️ trips.user_id missing. Adding it..."
-        );
-
-        await run(`
-            ALTER TABLE trips
-            ADD COLUMN user_id INTEGER
-        `);
-
-        console.log(
-            "✅ trips.user_id added successfully"
-        );
-
-    } else {
-
-        console.log(
-            "✅ trips.user_id already exists"
-        );
-
-    }
 
     /* =====================================================
        DESTINATIONS
@@ -447,21 +299,12 @@ async function initializeDatabase() {
 
     await run(`
         CREATE TABLE IF NOT EXISTS destinations (
-
             id INTEGER PRIMARY KEY AUTOINCREMENT,
-
             name TEXT,
-
             country TEXT,
-
             image TEXT
-
         )
     `);
-
-    console.log(
-        "✅ destinations table ready"
-    );
 
     /* =====================================================
        FOLLOWERS
@@ -469,34 +312,129 @@ async function initializeDatabase() {
 
     await run(`
         CREATE TABLE IF NOT EXISTS followers (
-
             id INTEGER PRIMARY KEY AUTOINCREMENT,
-
             follower_id INTEGER,
-
             following_id INTEGER,
-
             created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
 
             UNIQUE(
                 follower_id,
                 following_id
             )
-
         )
     `);
 
-    console.log(
-        "✅ followers table ready"
-    );
+    /* =====================================================
+       FOLLOW REQUESTS
+    ===================================================== */
+
+    await run(`
+        CREATE TABLE IF NOT EXISTS follow_requests (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+
+            sender_id INTEGER NOT NULL,
+
+            receiver_id INTEGER NOT NULL,
+
+            status TEXT DEFAULT 'pending',
+
+            created_at DATETIME
+            DEFAULT CURRENT_TIMESTAMP,
+
+            UNIQUE(
+                sender_id,
+                receiver_id
+            )
+        )
+    `);
 
     /* =====================================================
-       LIKES
+       CLOSE FRIENDS
+    ===================================================== */
+
+    await run(`
+        CREATE TABLE IF NOT EXISTS close_friends (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+
+            user_id INTEGER NOT NULL,
+
+            friend_id INTEGER NOT NULL,
+
+            created_at DATETIME
+            DEFAULT CURRENT_TIMESTAMP,
+
+            UNIQUE(
+                user_id,
+                friend_id
+            )
+        )
+    `);
+
+    await run(`
+    CREATE TABLE IF NOT EXISTS messages (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+
+        sender_id INTEGER NOT NULL,
+
+        receiver_id INTEGER NOT NULL,
+
+        message TEXT NOT NULL,
+
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    )
+`);
+
+    /* =====================================================
+       BLOCKED USERS
+    ===================================================== */
+
+    await run(`
+        CREATE TABLE IF NOT EXISTS blocked_users (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+
+            user_id INTEGER NOT NULL,
+
+            blocked_user_id INTEGER NOT NULL,
+
+            created_at DATETIME
+            DEFAULT CURRENT_TIMESTAMP,
+
+            UNIQUE(
+                user_id,
+                blocked_user_id
+            )
+        )
+    `);
+
+    /* =====================================================
+       CONTENT PREFERENCES
+    ===================================================== */
+
+    await run(`
+        CREATE TABLE IF NOT EXISTS content_preferences (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+
+            user_id INTEGER UNIQUE NOT NULL,
+
+            show_travel INTEGER DEFAULT 1,
+
+            show_reels INTEGER DEFAULT 1,
+
+            sensitive_content INTEGER DEFAULT 0,
+
+            autoplay_reels INTEGER DEFAULT 1,
+
+            updated_at DATETIME
+            DEFAULT CURRENT_TIMESTAMP
+        )
+    `);
+
+    /* =====================================================
+       TRIP LIKES
     ===================================================== */
 
     await run(`
         CREATE TABLE IF NOT EXISTS likes (
-
             id INTEGER PRIMARY KEY AUTOINCREMENT,
 
             user_id INTEGER,
@@ -507,13 +445,8 @@ async function initializeDatabase() {
                 user_id,
                 trip_id
             )
-
         )
     `);
-
-    console.log(
-        "✅ likes table ready"
-    );
 
     /* =====================================================
        COMMENTS
@@ -521,7 +454,6 @@ async function initializeDatabase() {
 
     await run(`
         CREATE TABLE IF NOT EXISTS comments (
-
             id INTEGER PRIMARY KEY AUTOINCREMENT,
 
             user_id INTEGER,
@@ -530,14 +462,165 @@ async function initializeDatabase() {
 
             comment TEXT,
 
-            created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-
+            created_at DATETIME
+            DEFAULT CURRENT_TIMESTAMP
         )
     `);
 
-    console.log(
-        "✅ comments table ready"
-    );
+    /* =====================================================
+       REELS
+    ===================================================== */
+
+    await run(`
+        CREATE TABLE IF NOT EXISTS reels (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+
+            user_id INTEGER NOT NULL,
+
+            title TEXT,
+
+            description TEXT,
+
+            video_url TEXT,
+
+            thumbnail TEXT,
+
+            visibility TEXT DEFAULT 'public',
+
+            created_at DATETIME
+            DEFAULT CURRENT_TIMESTAMP
+        )
+    `);
+
+    const reelColumns =
+        await all("PRAGMA table_info(reels)");
+
+    const existingReelColumns =
+        new Set(
+            reelColumns.map(
+                column => column.name
+            )
+        );
+
+    if (
+        !existingReelColumns.has(
+            "visibility"
+        )
+    ) {
+        await run(`
+            ALTER TABLE reels
+            ADD COLUMN visibility
+            TEXT DEFAULT 'public'
+        `);
+    }
+
+    /* =====================================================
+       SAVED REELS
+    ===================================================== */
+
+    await run(`
+        CREATE TABLE IF NOT EXISTS saved_reels (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+
+            user_id INTEGER NOT NULL,
+
+            reel_id INTEGER NOT NULL,
+
+            created_at DATETIME
+            DEFAULT CURRENT_TIMESTAMP,
+
+            UNIQUE(
+                user_id,
+                reel_id
+            )
+        )
+    `);
+
+    /* =====================================================
+       REEL LIKES
+    ===================================================== */
+
+    await run(`
+    CREATE TABLE IF NOT EXISTS reel_likes (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+
+        user_id INTEGER NOT NULL,
+
+        reel_id INTEGER NOT NULL,
+
+        created_at DATETIME
+        DEFAULT CURRENT_TIMESTAMP,
+
+        UNIQUE(
+            user_id,
+            reel_id
+        )
+    )
+`);
+
+    const reelLikeColumns =
+        await all("PRAGMA table_info(reel_likes)");
+
+    const existingReelLikeColumns =
+        new Set(
+            reelLikeColumns.map(
+                column => column.name
+            )
+        );
+
+    if (
+        !existingReelLikeColumns.has(
+            "created_at"
+        )
+    ) {
+        await run(`
+        ALTER TABLE reel_likes
+        ADD COLUMN created_at DATETIME
+        DEFAULT CURRENT_TIMESTAMP
+    `);
+
+        console.log(
+            "✅ Added reel_likes.created_at"
+        );
+    }
+
+    /* =====================================================
+       HIGHLIGHTS
+    ===================================================== */
+
+    await run(`
+        CREATE TABLE IF NOT EXISTS highlights (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+
+            user_id INTEGER NOT NULL,
+
+            title TEXT NOT NULL,
+
+            cover_image TEXT,
+
+            created_at DATETIME
+            DEFAULT CURRENT_TIMESTAMP
+        )
+    `);
+
+    /* =====================================================
+       HIGHLIGHT REELS
+    ===================================================== */
+
+    await run(`
+        CREATE TABLE IF NOT EXISTS highlight_reels (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+
+            highlight_id INTEGER NOT NULL,
+
+            reel_id INTEGER NOT NULL,
+
+            UNIQUE(
+                highlight_id,
+                reel_id
+            )
+        )
+    `);
 
     /* =====================================================
        DEFAULT DESTINATIONS
@@ -585,36 +668,7 @@ async function initializeDatabase() {
         )
     `);
 
-    console.log(
-        "✅ Default destinations ready"
-    );
-
-    /* =====================================================
-       FINAL SCHEMA CHECK
-    ===================================================== */
-
-    const finalTripColumns = await all(
-        "PRAGMA table_info(trips)"
-    );
-
-    console.log(
-        "================================="
-    );
-
-    console.log(
-        "🚀 FINAL trips schema:"
-    );
-
-    console.log(
-        finalTripColumns.map(
-            column => column.name
-        )
-    );
-
-    console.log(
-        "================================="
-    );
-
+    console.log("✅ Database initialization complete");
 }
 
 /* =========================================================
@@ -622,13 +676,11 @@ async function initializeDatabase() {
 ========================================================= */
 
 app.get("/", (req, res) => {
-
     res.json({
         success: true,
         message:
             "TravelHub Backend is running 🚀",
     });
-
 });
 
 /* =========================================================
@@ -638,73 +690,54 @@ app.get("/", (req, res) => {
 app.get(
     "/destinations",
     async (req, res) => {
-
         try {
-
-            const rows = await all(`
-                SELECT *
-                FROM destinations
-                ORDER BY id ASC
-            `);
+            const rows =
+                await all(`
+                    SELECT *
+                    FROM destinations
+                    ORDER BY id ASC
+                `);
 
             res.json(rows);
 
         } catch (error) {
-
-            console.error(
-                "Destinations error:",
-                error
-            );
-
             res.status(500).json({
                 message:
                     "Failed to load destinations",
-                error:
-                    error.message,
             });
-
         }
-
     }
 );
 
 app.get(
     "/destinations/:id",
     async (req, res) => {
-
         try {
-
-            const row = await get(
-                `
-                SELECT *
-                FROM destinations
-                WHERE id = ?
-                `,
-                [req.params.id]
-            );
+            const row =
+                await get(
+                    `
+                    SELECT *
+                    FROM destinations
+                    WHERE id = ?
+                    `,
+                    [req.params.id]
+                );
 
             if (!row) {
-
                 return res.status(404).json({
                     message:
                         "Destination not found",
                 });
-
             }
 
             res.json(row);
 
         } catch (error) {
-
             res.status(500).json({
                 message:
                     "Database Error",
-                error:
-                    error.message,
             });
-
         }
-
     }
 );
 
@@ -715,17 +748,14 @@ app.get(
 app.post(
     "/create-order",
     async (req, res) => {
-
         try {
 
             if (!razorpay) {
-
                 return res.status(500).json({
                     success: false,
                     message:
                         "Razorpay is not configured",
                 });
-
             }
 
             const amount =
@@ -735,28 +765,22 @@ app.post(
                 !amount ||
                 amount <= 0
             ) {
-
                 return res.status(400).json({
                     success: false,
                     message:
                         "Invalid amount",
                 });
-
             }
 
             const order =
                 await razorpay.orders.create({
-
                     amount:
-                        Math.round(
-                            amount * 100
-                        ),
+                        Math.round(amount * 100),
 
                     currency: "INR",
 
                     receipt:
                         `receipt_${Date.now()}`,
-
                 });
 
             res.json({
@@ -765,12 +789,6 @@ app.post(
             });
 
         } catch (error) {
-
-            console.error(
-                "Razorpay error:",
-                error
-            );
-
             res.status(500).json({
                 success: false,
                 message:
@@ -778,311 +796,9 @@ app.post(
                 error:
                     error.message,
             });
-
         }
-
     }
 );
-
-/* =========================================================
-   USERS
-========================================================= */
-
-app.get(
-    "/users",
-    async (req, res) => {
-
-        try {
-
-            const rows = await all(`
-                SELECT
-                    id,
-                    name,
-                    city,
-                    state,
-                    country,
-                    photo
-
-                FROM users
-
-                ORDER BY
-                    updated_at DESC,
-                    id DESC
-            `);
-
-            res.json(rows);
-
-        } catch (error) {
-
-            console.error(
-                "Users error:",
-                error
-            );
-
-            res.status(500).json({
-                message:
-                    "Database error",
-                error:
-                    error.message,
-            });
-
-        }
-
-    }
-);
-
-/* =========================================================
-   SEARCH USERS
-========================================================= */
-
-app.get(
-    "/search-users",
-    async (req, res) => {
-
-        try {
-
-            const search =
-                req.query.search || "";
-
-            const rows = await all(
-                `
-                SELECT
-                    id,
-                    name,
-                    city,
-                    state,
-                    country,
-                    photo
-
-                FROM users
-
-                WHERE name LIKE ?
-
-                ORDER BY
-                    updated_at DESC,
-                    id DESC
-                `,
-                [`%${search}%`]
-            );
-
-            res.json(rows);
-
-        } catch (error) {
-
-            res.status(500).json({
-                message:
-                    "Database error",
-                error:
-                    error.message,
-            });
-
-        }
-
-    }
-);
-
-/* =========================================================
-   ALL USERS
-========================================================= */
-
-app.get(
-    "/all-users",
-    async (req, res) => {
-
-        try {
-
-            const rows = await all(`
-                SELECT
-                    id,
-                    name,
-                    email
-                FROM users
-            `);
-
-            res.json(rows);
-
-        } catch (error) {
-
-            res.status(500).json({
-                message:
-                    "Database Error",
-                error:
-                    error.message,
-            });
-
-        }
-
-    }
-);
-
-/* =========================================================
-   SINGLE USER
-========================================================= */
-
-app.get(
-    "/users/:id",
-    async (req, res) => {
-
-        try {
-
-            const user =
-                await get(
-                    `
-                    SELECT
-
-                        id,
-                        name,
-                        email,
-
-                        city,
-                        state,
-                        country,
-
-                        photo,
-
-                        instagram,
-                        facebook,
-                        twitter,
-                        linkedin,
-                        youtube,
-                        tiktok,
-                        website
-
-                    FROM users
-
-                    WHERE id = ?
-                    `,
-                    [req.params.id]
-                );
-
-            if (!user) {
-
-                return res.status(404).json({
-                    error:
-                        "User not found",
-                });
-
-            }
-
-            res.json(user);
-
-        } catch (error) {
-
-            console.error(
-                "Single user error:",
-                error
-            );
-
-            res.status(500).json({
-                error:
-                    "Failed to fetch user",
-                details:
-                    error.message,
-            });
-
-        }
-
-    }
-);
-
-/* =========================================================
-   ALL TRIPS
-========================================================= */
-
-app.get(
-    "/trips",
-    async (req, res) => {
-
-        try {
-
-            const rows = await all(`
-                SELECT
-                    id,
-                    title,
-                    location,
-                    price,
-                    image,
-                    user_id
-
-                FROM trips
-
-                ORDER BY id DESC
-            `);
-
-            res.json(rows);
-
-        } catch (error) {
-
-            console.error(
-                "❌ ALL TRIPS ERROR:",
-                error
-            );
-
-            res.status(500).json({
-                success: false,
-                message:
-                    "Failed to fetch trips",
-                error:
-                    error.message,
-            });
-
-        }
-
-    }
-);
-
-/* =========================================================
-   USER TRIPS
-========================================================= */
-/* =========================================================
-   USER TRIPS
-========================================================= */
-
-app.get("/users/:id/trips", (req, res) => {
-
-    const userId = req.params.id;
-
-    console.log("📍 Loading trips for user:", userId);
-
-    db.all(
-        `
-        SELECT
-            id,
-            title,
-            location,
-            price,
-            image,
-            user_id
-        FROM trips
-        WHERE user_id = ?
-        ORDER BY id DESC
-        `,
-        [userId],
-        (err, rows) => {
-
-            if (err) {
-
-                console.error(
-                    "❌ USER TRIPS ERROR:",
-                    err.message
-                );
-
-                return res.status(500).json({
-                    success: false,
-                    message: "Failed to load user trips",
-                    error: err.message
-                });
-            }
-
-            console.log(
-                "✅ Trips found:",
-                rows.length
-            );
-
-            res.json(rows);
-        }
-    );
-});
 
 /* =========================================================
    REGISTER
@@ -1091,7 +807,6 @@ app.get("/users/:id/trips", (req, res) => {
 app.post(
     "/register",
     async (req, res) => {
-
         try {
 
             const {
@@ -1105,12 +820,10 @@ app.post(
                 !email ||
                 !password
             ) {
-
                 return res.status(400).json({
                     message:
                         "Name, email and password are required",
                 });
-
             }
 
             const hashedPassword =
@@ -1165,28 +878,23 @@ app.post(
 
             res.json({
                 success: true,
+                userId:
+                    result.lastID,
                 message:
-                    "Register successfully",
+                    "Registered successfully",
             });
 
         } catch (error) {
-
-            console.error(
-                "Register error:",
-                error
-            );
 
             if (
                 error.message.includes(
                     "UNIQUE"
                 )
             ) {
-
                 return res.status(400).json({
                     message:
                         "User already exists",
                 });
-
             }
 
             res.status(500).json({
@@ -1195,9 +903,7 @@ app.post(
                 error:
                     error.message,
             });
-
         }
-
     }
 );
 
@@ -1208,7 +914,6 @@ app.post(
 app.post(
     "/login",
     async (req, res) => {
-
         try {
 
             const {
@@ -1227,12 +932,10 @@ app.post(
                 );
 
             if (!user) {
-
                 return res.status(400).json({
                     message:
                         "Invalid Email",
                 });
-
             }
 
             const valid =
@@ -1242,12 +945,10 @@ app.post(
                 );
 
             if (!valid) {
-
                 return res.status(400).json({
                     message:
                         "Invalid password",
                 });
-
             }
 
             const token =
@@ -1270,26 +971,20 @@ app.post(
 
             res.json({
                 success: true,
+                userId:
+                    user.id,
                 message:
                     "Login successfully",
             });
 
         } catch (error) {
-
-            console.error(
-                "Login error:",
-                error
-            );
-
             res.status(500).json({
                 message:
                     "Login failed",
                 error:
                     error.message,
             });
-
         }
-
     }
 );
 
@@ -1322,7 +1017,6 @@ function setAuthCookies(
             1000,
 
         path: "/",
-
     };
 
     res.cookie(
@@ -1331,12 +1025,7 @@ function setAuthCookies(
         cookieOptions
     );
 
-    /*
-       Dev token only for local development.
-    */
-
     if (!isProduction) {
-
         res.cookie(
             "dev_token",
             token,
@@ -1353,9 +1042,7 @@ function setAuthCookies(
                 path: "/",
             }
         );
-
     }
-
 }
 
 /* =========================================================
@@ -1366,22 +1053,18 @@ app.get(
     "/profile",
     auth,
     async (req, res) => {
-
         try {
 
             const user =
                 await get(
                     `
                     SELECT
-
                         id,
                         name,
                         email,
-
                         city,
                         state,
                         country,
-
                         photo,
 
                         instagram,
@@ -1390,7 +1073,9 @@ app.get(
                         linkedin,
                         youtube,
                         tiktok,
-                        website
+                        website,
+
+                        is_private
 
                     FROM users
 
@@ -1400,44 +1085,172 @@ app.get(
                 );
 
             if (!user) {
-
                 return res.status(404).json({
                     message:
                         "User Not Found",
                 });
-
             }
 
             res.json(user);
 
         } catch (error) {
-
-            console.error(
-                "Profile error:",
-                error
-            );
-
             res.status(500).json({
                 message:
                     "Database Error",
-                error:
-                    error.message,
             });
-
         }
-
     }
 );
 
 /* =========================================================
-   UPDATE PROFILE + SOCIAL MEDIA
+   SINGLE USER
+========================================================= */
+
+app.get(
+    "/users/:id",
+    async (req, res) => {
+        try {
+
+            const user =
+                await get(
+                    `
+                    SELECT
+                        id,
+                        name,
+                        city,
+                        state,
+                        country,
+                        photo,
+
+                        instagram,
+                        facebook,
+                        twitter,
+                        linkedin,
+                        youtube,
+                        tiktok,
+                        website,
+
+                        is_private
+
+                    FROM users
+
+                    WHERE id = ?
+                    `,
+                    [req.params.id]
+                );
+
+            if (!user) {
+                return res.status(404).json({
+                    message:
+                        "User not found",
+                });
+            }
+
+            res.json(user);
+
+        } catch (error) {
+            res.status(500).json({
+                message:
+                    "Failed to fetch user",
+            });
+        }
+    }
+);
+
+/* =========================================================
+   ALL USERS
+========================================================= */
+
+app.get(
+    "/users",
+    async (req, res) => {
+        try {
+
+            const rows =
+                await all(`
+                    SELECT
+                        id,
+                        name,
+                        city,
+                        state,
+                        country,
+                        photo,
+                        is_private
+
+                    FROM users
+
+                    ORDER BY
+                        updated_at DESC,
+                        id DESC
+                `);
+
+            res.json(rows);
+
+        } catch (error) {
+            res.status(500).json({
+                message:
+                    "Database error",
+                error:
+                    error.message,
+            });
+        }
+    }
+);
+
+/* =========================================================
+   SEARCH USERS
+========================================================= */
+
+app.get(
+    "/search-users",
+    async (req, res) => {
+        try {
+
+            const search =
+                req.query.search || "";
+
+            const rows =
+                await all(
+                    `
+                    SELECT
+                        id,
+                        name,
+                        city,
+                        state,
+                        country,
+                        photo,
+                        is_private
+
+                    FROM users
+
+                    WHERE name LIKE ?
+
+                    ORDER BY
+                        updated_at DESC,
+                        id DESC
+                    `,
+                    [`%${search}%`]
+                );
+
+            res.json(rows);
+
+        } catch (error) {
+            res.status(500).json({
+                message:
+                    "Database error",
+            });
+        }
+    }
+);
+
+/* =========================================================
+   UPDATE PROFILE
 ========================================================= */
 
 app.put(
     "/profile",
     auth,
     async (req, res) => {
-
         try {
 
             const {
@@ -1455,6 +1268,8 @@ app.put(
                 tiktok,
                 website,
 
+                is_private,
+
             } = req.body;
 
             await run(
@@ -1464,28 +1279,20 @@ app.put(
                 SET
 
                     name = ?,
-
                     city = ?,
-
                     state = ?,
-
                     country = ?,
-
                     photo = ?,
 
                     instagram = ?,
-
                     facebook = ?,
-
                     twitter = ?,
-
                     linkedin = ?,
-
                     youtube = ?,
-
                     tiktok = ?,
-
                     website = ?,
+
+                    is_private = ?,
 
                     updated_at =
                         CURRENT_TIMESTAMP
@@ -1493,61 +1300,40 @@ app.put(
                 WHERE id = ?
                 `,
                 [
-
                     name || "",
-
                     city || "",
-
                     state || "",
-
                     country || "",
-
                     photo || "",
 
                     instagram || "",
-
                     facebook || "",
-
                     twitter || "",
-
                     linkedin || "",
-
                     youtube || "",
-
                     tiktok || "",
-
                     website || "",
 
-                    req.user.id,
+                    is_private ? 1 : 0,
 
+                    req.user.id,
                 ]
             );
 
             res.json({
-
                 success: true,
-
                 message:
                     "Profile Updated Successfully",
-
             });
 
         } catch (error) {
-
-            console.error(
-                "Profile update error:",
-                error
-            );
-
             res.status(500).json({
                 message:
                     "Update Failed",
                 error:
                     error.message,
             });
-
         }
-
     }
 );
 
@@ -1585,7 +1371,6 @@ app.post(
             message:
                 "Logout Done",
         });
-
     }
 );
 
@@ -1597,7 +1382,6 @@ app.post(
     "/trips",
     auth,
     async (req, res) => {
-
         try {
 
             const {
@@ -1611,12 +1395,10 @@ app.post(
                 !title ||
                 !location
             ) {
-
                 return res.status(400).json({
                     message:
                         "Title and location are required",
                 });
-
             }
 
             const result =
@@ -1632,13 +1414,7 @@ app.post(
                     )
 
                     VALUES
-                    (
-                        ?,
-                        ?,
-                        ?,
-                        ?,
-                        ?
-                    )
+                    (?, ?, ?, ?, ?)
                     `,
                     [
                         title,
@@ -1650,45 +1426,92 @@ app.post(
                 );
 
             res.json({
-
                 success: true,
-
                 id:
                     result.lastID,
-
                 message:
                     "Trip added successfully",
-
             });
 
         } catch (error) {
-
-            console.error(
-                "Create trip error:",
-                error
-            );
-
             res.status(500).json({
                 message:
                     "Failed to add trip",
                 error:
                     error.message,
             });
-
         }
-
     }
 );
 
 /* =========================================================
-   FOLLOW
+   ALL TRIPS
+========================================================= */
+
+app.get(
+    "/trips",
+    async (req, res) => {
+        try {
+
+            const rows =
+                await all(`
+                    SELECT *
+                    FROM trips
+                    ORDER BY id DESC
+                `);
+
+            res.json(rows);
+
+        } catch (error) {
+            res.status(500).json({
+                message:
+                    "Failed to fetch trips",
+            });
+        }
+    }
+);
+
+/* =========================================================
+   USER TRIPS
+========================================================= */
+
+app.get(
+    "/users/:id/trips",
+    async (req, res) => {
+        try {
+
+            const rows =
+                await all(
+                    `
+                    SELECT *
+                    FROM trips
+
+                    WHERE user_id = ?
+
+                    ORDER BY id DESC
+                    `,
+                    [req.params.id]
+                );
+
+            res.json(rows);
+
+        } catch (error) {
+            res.status(500).json({
+                message:
+                    "Failed to load trips",
+            });
+        }
+    }
+);
+
+/* =========================================================
+   FOLLOW USER
 ========================================================= */
 
 app.post(
     "/follow/:id",
     auth,
     async (req, res) => {
-
         try {
 
             const followerId =
@@ -1701,12 +1524,88 @@ app.post(
                 String(followerId) ===
                 String(followingId)
             ) {
-
                 return res.status(400).json({
                     message:
-                        "You cannot follow yourself brooo",
+                        "You cannot follow yourself",
                 });
+            }
 
+            const blocked = await get(
+                `
+    SELECT id
+    FROM blocked_users
+
+    WHERE
+        (user_id = ? AND blocked_user_id = ?)
+
+        OR
+
+        (user_id = ? AND blocked_user_id = ?)
+    `,
+                [
+                    followerId,
+                    followingId,
+                    followingId,
+                    followerId,
+                ]
+            );
+
+            if (blocked) {
+                return res.status(403).json({
+                    message:
+                        "You cannot follow this user",
+                });
+            }
+
+            const targetUser =
+                await get(
+                    `
+                    SELECT
+                        is_private
+
+                    FROM users
+
+                    WHERE id = ?
+                    `,
+                    [followingId]
+                );
+
+            if (!targetUser) {
+                return res.status(404).json({
+                    message:
+                        "User not found",
+                });
+            }
+
+            if (
+                targetUser.is_private
+            ) {
+
+                await run(`
+    INSERT INTO follow_requests
+    (
+        sender_id,
+        receiver_id,
+        status
+    )
+    VALUES (?, ?, 'pending')
+
+    ON CONFLICT(sender_id, receiver_id)
+
+    DO UPDATE SET
+        status = 'pending',
+        created_at = CURRENT_TIMESTAMP
+`, [
+                    followerId,
+                    followingId,
+                ]);
+
+                return res.json({
+                    success: true,
+                    requested: true,
+                    message:
+                        "Follow request sent",
+                });
             }
 
             await run(
@@ -1727,21 +1626,189 @@ app.post(
 
             res.json({
                 success: true,
+                following: true,
                 message:
                     "Followed successfully",
             });
 
         } catch (error) {
-
             res.status(400).json({
                 message:
-                    "You're already following this user",
-                error:
-                    error.message,
+                    "Already following or request already sent",
+            });
+        }
+    }
+);
+
+/* =========================================================
+   FOLLOW REQUESTS
+========================================================= */
+
+app.get(
+    "/follow-requests",
+    auth,
+    async (req, res) => {
+        try {
+
+            const requests =
+                await all(
+                    `
+                    SELECT
+
+                        follow_requests.id,
+
+                        follow_requests.sender_id,
+
+                        follow_requests.created_at,
+
+                        users.name,
+
+                        users.photo
+
+                    FROM follow_requests
+
+                    JOIN users
+
+                    ON users.id =
+                       follow_requests.sender_id
+
+                    WHERE
+                        follow_requests.receiver_id = ?
+
+                    AND
+                        follow_requests.status = 'pending'
+
+                    ORDER BY
+                        follow_requests.created_at DESC
+                    `,
+                    [req.user.id]
+                );
+
+            res.json(requests);
+
+        } catch (error) {
+            res.status(500).json({
+                message:
+                    "Failed to load requests",
+            });
+        }
+    }
+);
+
+/* =========================================================
+   ACCEPT FOLLOW REQUEST
+========================================================= */
+
+app.post(
+    "/follow-requests/:id/accept",
+    auth,
+    async (req, res) => {
+        try {
+
+            const request =
+                await get(
+                    `
+                    SELECT *
+
+                    FROM follow_requests
+
+                    WHERE id = ?
+
+                    AND receiver_id = ?
+                    `,
+                    [
+                        req.params.id,
+                        req.user.id,
+                    ]
+                );
+
+            if (!request) {
+                return res.status(404).json({
+                    message:
+                        "Request not found",
+                });
+            }
+
+            await run(
+                `
+                INSERT OR IGNORE INTO followers
+                (
+                    follower_id,
+                    following_id
+                )
+
+                VALUES (?, ?)
+                `,
+                [
+                    request.sender_id,
+                    req.user.id,
+                ]
+            );
+
+            await run(
+                `
+                UPDATE follow_requests
+
+                SET status = 'accepted'
+
+                WHERE id = ?
+                `,
+                [req.params.id]
+            );
+
+            res.json({
+                success: true,
+                message:
+                    "Follow request accepted",
             });
 
+        } catch (error) {
+            res.status(500).json({
+                message:
+                    "Failed to accept request",
+            });
         }
+    }
+);
 
+/* =========================================================
+   REJECT FOLLOW REQUEST
+========================================================= */
+
+app.post(
+    "/follow-requests/:id/reject",
+    auth,
+    async (req, res) => {
+        try {
+
+            await run(
+                `
+                UPDATE follow_requests
+
+                SET status = 'rejected'
+
+                WHERE id = ?
+
+                AND receiver_id = ?
+                `,
+                [
+                    req.params.id,
+                    req.user.id,
+                ]
+            );
+
+            res.json({
+                success: true,
+                message:
+                    "Follow request rejected",
+            });
+
+        } catch (error) {
+            res.status(500).json({
+                message:
+                    "Failed to reject request",
+            });
+        }
     }
 );
 
@@ -1753,7 +1820,6 @@ app.delete(
     "/unfollow/:id",
     auth,
     async (req, res) => {
-
         try {
 
             await run(
@@ -1777,16 +1843,11 @@ app.delete(
             });
 
         } catch (error) {
-
             res.status(500).json({
                 message:
                     "Unable to unfollow",
-                error:
-                    error.message,
             });
-
         }
-
     }
 );
 
@@ -1798,7 +1859,6 @@ app.get(
     "/follow-status/:id",
     auth,
     async (req, res) => {
-
         try {
 
             const row =
@@ -1818,22 +1878,39 @@ app.get(
                     ]
                 );
 
+            const request =
+                await get(
+                    `
+                    SELECT id
+
+                    FROM follow_requests
+
+                    WHERE sender_id = ?
+
+                    AND receiver_id = ?
+
+                    AND status = 'pending'
+                    `,
+                    [
+                        req.user.id,
+                        req.params.id,
+                    ]
+                );
+
             res.json({
                 following:
                     !!row,
+
+                requested:
+                    !!request,
             });
 
         } catch (error) {
-
             res.status(500).json({
                 message:
                     "Database error",
-                error:
-                    error.message,
             });
-
         }
-
     }
 );
 
@@ -1844,7 +1921,6 @@ app.get(
 app.get(
     "/followers-count/:id",
     async (req, res) => {
-
         try {
 
             const row =
@@ -1863,16 +1939,11 @@ app.get(
             res.json(row);
 
         } catch (error) {
-
             res.status(500).json({
                 message:
                     "Database error",
-                error:
-                    error.message,
             });
-
         }
-
     }
 );
 
@@ -1883,7 +1954,6 @@ app.get(
 app.get(
     "/following-count/:id",
     async (req, res) => {
-
         try {
 
             const row =
@@ -1902,28 +1972,1573 @@ app.get(
             res.json(row);
 
         } catch (error) {
-
             res.status(500).json({
                 message:
                     "Database error",
-                error:
-                    error.message,
+            });
+        }
+    }
+);
+
+/* =========================================================
+   CLOSE FRIENDS
+========================================================= */
+
+app.post(
+    "/close-friends/:id",
+    auth,
+    async (req, res) => {
+        try {
+
+            if (String(req.user.id) === String(req.params.id)) {
+                return res.status(400).json({
+                    message: "You cannot add yourself to close friends",
+                });
+            }
+
+            await run(
+                `
+                INSERT INTO close_friends
+                (
+                    user_id,
+                    friend_id
+                )
+
+                VALUES (?, ?)
+                `,
+                [
+                    req.user.id,
+                    req.params.id,
+                ]
+            );
+
+            res.json({
+                success: true,
+                message:
+                    "Added to close friends",
             });
 
+        } catch (error) {
+            res.status(400).json({
+                message:
+                    "Already in close friends",
+            });
+        }
+    }
+);
+
+/* =========================================================
+   SEND MESSAGE
+========================================================= */
+
+app.post(
+    "/messages/:id",
+    auth,
+    async (req, res) => {
+
+        try {
+
+            const receiverId = req.params.id;
+
+            const { message } = req.body;
+
+            if (!message || !message.trim()) {
+                return res.status(400).json({
+                    message: "Message cannot be empty"
+                });
+            }
+
+            if (Number(receiverId) === Number(req.user.id)) {
+                return res.status(400).json({
+                    message: "You cannot message yourself"
+                });
+            }
+
+            const result = await run(
+                `
+                INSERT INTO messages (
+                    sender_id,
+                    receiver_id,
+                    message
+                )
+                VALUES (?, ?, ?)
+                `,
+                [
+                    req.user.id,
+                    receiverId,
+                    message.trim()
+                ]
+            );
+
+            res.status(201).json({
+                message: "Message sent successfully",
+                messageId: result.lastID
+            });
+
+        } catch (error) {
+
+            console.error(
+                "SEND MESSAGE ERROR:",
+                error
+            );
+
+            res.status(500).json({
+                message: "Failed to send message"
+            });
         }
 
     }
 );
 
 /* =========================================================
-   LIKE
+   GET CONVERSATION
+========================================================= */
+
+app.get(
+    "/messages/:id",
+    auth,
+    async (req, res) => {
+
+        try {
+
+            const otherUserId = req.params.id;
+
+            const messages = await all(
+                `
+                SELECT
+                    id,
+                    sender_id,
+                    receiver_id,
+                    message,
+                    created_at
+                FROM messages
+                WHERE
+                    (
+                        sender_id = ?
+                        AND receiver_id = ?
+                    )
+                    OR
+                    (
+                        sender_id = ?
+                        AND receiver_id = ?
+                    )
+                ORDER BY created_at ASC, id ASC
+                `,
+                [
+                    req.user.id,
+                    otherUserId,
+                    otherUserId,
+                    req.user.id
+                ]
+            );
+
+            res.json(messages);
+
+        } catch (error) {
+
+            console.error(
+                "GET CONVERSATION ERROR:",
+                error
+            );
+
+            res.status(500).json({
+                message: "Failed to load conversation"
+            });
+        }
+
+    }
+);
+
+app.delete(
+    "/close-friends/:id",
+    auth,
+    async (req, res) => {
+        try {
+
+            await run(
+                `
+                DELETE FROM close_friends
+
+                WHERE user_id = ?
+
+                AND friend_id = ?
+                `,
+                [
+                    req.user.id,
+                    req.params.id,
+                ]
+            );
+
+            res.json({
+                success: true,
+                message:
+                    "Removed from close friends",
+            });
+
+        } catch (error) {
+            res.status(500).json({
+                message:
+                    "Failed to remove",
+            });
+        }
+    }
+);
+
+app.get(
+    "/close-friends",
+    auth,
+    async (req, res) => {
+        try {
+
+            const friends =
+                await all(
+                    `
+                    SELECT
+                        users.id,
+                        users.name,
+                        users.photo
+
+                    FROM close_friends
+
+                    JOIN users
+
+                    ON users.id =
+                       close_friends.friend_id
+
+                    WHERE
+                        close_friends.user_id = ?
+                    `,
+                    [req.user.id]
+                );
+
+            res.json(friends);
+
+        } catch (error) {
+            res.status(500).json({
+                message:
+                    "Failed to load close friends",
+            });
+        }
+    }
+);
+
+/* =========================================================
+   BLOCK USER
+========================================================= */
+
+app.post(
+    "/block/:id",
+    auth,
+    async (req, res) => {
+        try {
+
+            if (
+                String(req.user.id) ===
+                String(req.params.id)
+            ) {
+                return res.status(400).json({
+                    message:
+                        "You cannot block yourself",
+                });
+            }
+
+            await run(
+                `
+                INSERT INTO blocked_users
+                (
+                    user_id,
+                    blocked_user_id
+                )
+
+                VALUES (?, ?)
+                `,
+                [
+                    req.user.id,
+                    req.params.id,
+                ]
+            );
+
+            await run(
+                `
+                DELETE FROM followers
+
+                WHERE
+
+                (
+                    follower_id = ?
+
+                    AND following_id = ?
+                )
+
+                OR
+
+                (
+                    follower_id = ?
+
+                    AND following_id = ?
+                )
+                `,
+                [
+                    req.user.id,
+                    req.params.id,
+                    req.params.id,
+                    req.user.id,
+                ]
+            );
+
+            res.json({
+                success: true,
+                message:
+                    "User blocked",
+            });
+
+        } catch (error) {
+            res.status(400).json({
+                message:
+                    "User already blocked",
+            });
+        }
+    }
+);
+
+app.delete(
+    "/block/:id",
+    auth,
+    async (req, res) => {
+        try {
+
+            await run(
+                `
+                DELETE FROM blocked_users
+
+                WHERE user_id = ?
+
+                AND blocked_user_id = ?
+                `,
+                [
+                    req.user.id,
+                    req.params.id,
+                ]
+            );
+
+            res.json({
+                success: true,
+                message:
+                    "User unblocked",
+            });
+
+        } catch (error) {
+            res.status(500).json({
+                message:
+                    "Failed to unblock",
+            });
+        }
+    }
+);
+
+app.get(
+    "/blocked-users",
+    auth,
+    async (req, res) => {
+        try {
+
+            const users =
+                await all(
+                    `
+                    SELECT
+                        users.id,
+                        users.name,
+                        users.photo
+
+                    FROM blocked_users
+
+                    JOIN users
+
+                    ON users.id =
+                       blocked_users.blocked_user_id
+
+                    WHERE
+                        blocked_users.user_id = ?
+                    `,
+                    [req.user.id]
+                );
+
+            res.json(users);
+
+        } catch (error) {
+            res.status(500).json({
+                message:
+                    "Failed to load blocked users",
+            });
+        }
+    }
+);
+
+/* =========================================================
+   CONTENT PREFERENCES
+========================================================= */
+
+app.get(
+    "/content-preferences",
+    auth,
+    async (req, res) => {
+        try {
+
+            let preferences =
+                await get(
+                    `
+                    SELECT *
+
+                    FROM content_preferences
+
+                    WHERE user_id = ?
+                    `,
+                    [req.user.id]
+                );
+
+            if (!preferences) {
+
+                await run(
+                    `
+                    INSERT INTO content_preferences
+                    (
+                        user_id
+                    )
+
+                    VALUES (?)
+                    `,
+                    [req.user.id]
+                );
+
+                preferences =
+                    await get(
+                        `
+                        SELECT *
+
+                        FROM content_preferences
+
+                        WHERE user_id = ?
+                        `,
+                        [req.user.id]
+                    );
+            }
+
+            res.json(preferences);
+
+        } catch (error) {
+            res.status(500).json({
+                message:
+                    "Failed to load preferences",
+            });
+        }
+    }
+);
+
+app.put(
+    "/content-preferences",
+    auth,
+    async (req, res) => {
+        try {
+
+            const {
+                show_travel = 1,
+                show_reels = 1,
+                sensitive_content = 0,
+                autoplay_reels = 1,
+            } = req.body;
+
+            await run(
+                `
+                INSERT INTO content_preferences
+                (
+                    user_id,
+                    show_travel,
+                    show_reels,
+                    sensitive_content,
+                    autoplay_reels
+                )
+
+                VALUES (?, ?, ?, ?, ?)
+
+                ON CONFLICT(user_id)
+
+                DO UPDATE SET
+
+                    show_travel =
+                        excluded.show_travel,
+
+                    show_reels =
+                        excluded.show_reels,
+
+                    sensitive_content =
+                        excluded.sensitive_content,
+
+                    autoplay_reels =
+                        excluded.autoplay_reels,
+
+                    updated_at =
+                        CURRENT_TIMESTAMP
+                `,
+                [
+                    req.user.id,
+                    show_travel ? 1 : 0,
+                    show_reels ? 1 : 0,
+                    sensitive_content ? 1 : 0,
+                    autoplay_reels ? 1 : 0,
+                ]
+            );
+
+            res.json({
+                success: true,
+                message:
+                    "Preferences updated",
+            });
+
+        } catch (error) {
+            res.status(500).json({
+                message:
+                    "Failed to update preferences",
+            });
+        }
+    }
+);
+
+/* =========================================================
+   CREATE REEL
+========================================================= */
+
+app.post(
+    "/reels",
+    auth,
+    async (req, res) => {
+        try {
+
+            const {
+                title,
+                description,
+                video_url,
+                thumbnail,
+                visibility,
+            } = req.body;
+
+            if (!video_url) {
+                return res.status(400).json({
+                    message:
+                        "Video URL is required",
+                });
+            }
+
+            const allowedVisibility = [
+                "public",
+                "followers",
+                "close_friends",
+            ];
+
+            const finalVisibility =
+                allowedVisibility.includes(
+                    visibility
+                )
+                    ? visibility
+                    : "public";
+
+            const result =
+                await run(
+                    `
+                    INSERT INTO reels
+                    (
+                        user_id,
+                        title,
+                        description,
+                        video_url,
+                        thumbnail,
+                        visibility
+                    )
+
+                    VALUES
+                    (?, ?, ?, ?, ?, ?)
+                    `,
+                    [
+                        req.user.id,
+                        title || "",
+                        description || "",
+                        video_url,
+                        thumbnail || "",
+                        finalVisibility,
+                    ]
+                );
+
+            res.json({
+                success: true,
+                id:
+                    result.lastID,
+                message:
+                    "Reel created successfully",
+            });
+
+        } catch (error) {
+            res.status(500).json({
+                message:
+                    "Failed to create reel",
+                error:
+                    error.message,
+            });
+        }
+    }
+);
+
+/* =========================================================
+   GET ALL REELS
+========================================================= */
+
+app.get(
+    "/reels",
+    auth,
+    async (req, res) => {
+        try {
+
+            const userId =
+                req.user.id;
+
+            const reels =
+                await all(
+                    `
+                    SELECT
+
+                        reels.*,
+
+                        users.name,
+
+                        users.photo,
+
+                        COUNT(
+                            DISTINCT reel_likes.id
+                        ) AS likes_count,
+
+                        CASE
+
+                            WHEN EXISTS
+                            (
+                                SELECT 1
+
+                                FROM reel_likes
+
+                                WHERE
+                                    reel_likes.reel_id =
+                                    reels.id
+
+                                AND
+                                    reel_likes.user_id = ?
+                            )
+
+                            THEN 1
+
+                            ELSE 0
+
+                        END AS liked,
+
+                        CASE
+
+                            WHEN EXISTS
+                            (
+                                SELECT 1
+
+                                FROM saved_reels
+
+                                WHERE
+                                    saved_reels.reel_id =
+                                    reels.id
+
+                                AND
+                                    saved_reels.user_id = ?
+                            )
+
+                            THEN 1
+
+                            ELSE 0
+
+                        END AS saved
+
+                    FROM reels
+
+                    JOIN users
+
+                    ON users.id =
+                       reels.user_id
+
+                    LEFT JOIN reel_likes
+
+                    ON reel_likes.reel_id =
+                       reels.id
+
+                    WHERE
+
+                        reels.visibility = 'public'
+
+                    OR
+
+                        reels.user_id = ?
+
+                    OR
+
+                        (
+                            reels.visibility =
+                            'followers'
+
+                            AND EXISTS
+                            (
+                                SELECT 1
+
+                                FROM followers
+
+                                WHERE
+
+                                    follower_id = ?
+
+                                AND
+
+                                    following_id =
+                                    reels.user_id
+                            )
+                        )
+
+                    OR
+
+                        (
+                            reels.visibility =
+                            'close_friends'
+
+                            AND EXISTS
+                            (
+                                SELECT 1
+
+                                FROM close_friends
+
+                                WHERE
+
+                                    user_id =
+                                    reels.user_id
+
+                                AND
+
+                                    friend_id = ?
+                            )
+                        )
+
+                    GROUP BY reels.id
+
+                    ORDER BY
+                        reels.created_at DESC
+                    `,
+                    [
+                        userId,
+                        userId,
+                        userId,
+                        userId,
+                        userId,
+                    ]
+                );
+
+            res.json(reels);
+
+        } catch (error) {
+            res.status(500).json({
+                message:
+                    "Failed to load reels",
+                error:
+                    error.message,
+            });
+        }
+    }
+);
+
+/* =========================================================
+   GET USER REELS
+========================================================= */
+
+app.get(
+    "/users/:id/reels",
+    auth,
+    async (req, res) => {
+        try {
+
+            const ownerId =
+                req.params.id;
+
+            const viewerId =
+                req.user.id;
+
+            const reels =
+                await all(
+                    `
+                    SELECT *
+
+                    FROM reels
+
+                    WHERE user_id = ?
+
+                    AND
+
+                    (
+                        visibility = 'public'
+
+                        OR user_id = ?
+
+                        OR
+                        (
+                            visibility = 'followers'
+
+                            AND EXISTS
+                            (
+                                SELECT 1
+
+                                FROM followers
+
+                                WHERE
+
+                                    follower_id = ?
+
+                                AND
+
+                                    following_id = ?
+                            )
+                        )
+
+                        OR
+                        (
+                            visibility =
+                            'close_friends'
+
+                            AND EXISTS
+                            (
+                                SELECT 1
+
+                                FROM close_friends
+
+                                WHERE
+
+                                    user_id = ?
+
+                                AND
+
+                                    friend_id = ?
+                            )
+                        )
+                    )
+
+                    ORDER BY
+                        created_at DESC
+                    `,
+                    [
+                        ownerId,
+                        viewerId,
+                        viewerId,
+                        ownerId,
+                        ownerId,
+                        viewerId,
+                    ]
+                );
+
+            res.json(reels);
+
+        } catch (error) {
+            res.status(500).json({
+                message:
+                    "Failed to load user reels",
+            });
+        }
+    }
+);
+
+/* =========================================================
+   DELETE REEL
+========================================================= */
+
+app.delete(
+    "/reels/:id",
+    auth,
+    async (req, res) => {
+        try {
+
+            const reel = await get(
+                `
+                SELECT id
+                FROM reels
+                WHERE id = ?
+                AND user_id = ?
+                `,
+                [
+                    req.params.id,
+                    req.user.id,
+                ]
+            );
+
+            if (!reel) {
+                return res.status(404).json({
+                    message: "Reel not found",
+                });
+            }
+
+            await run(`
+                DELETE FROM reel_likes
+                WHERE reel_id = ?
+            `, [req.params.id]);
+
+            await run(`
+                DELETE FROM saved_reels
+                WHERE reel_id = ?
+            `, [req.params.id]);
+
+            await run(`
+                DELETE FROM highlight_reels
+                WHERE reel_id = ?
+            `, [req.params.id]);
+
+            await run(`
+                DELETE FROM reels
+                WHERE id = ?
+                AND user_id = ?
+            `, [
+                req.params.id,
+                req.user.id,
+            ]);
+
+            res.json({
+                success: true,
+                message: "Reel deleted successfully",
+            });
+
+        } catch (error) {
+
+            console.error(error);
+
+            res.status(500).json({
+                message: "Failed to delete reel",
+            });
+        }
+    }
+);
+
+/* =========================================================
+   LIKE REEL
+========================================================= */
+
+app.post(
+    "/reels/:id/like",
+    auth,
+    async (req, res) => {
+        try {
+
+            await run(
+                `
+                INSERT INTO reel_likes
+                (
+                    user_id,
+                    reel_id
+                )
+
+                VALUES (?, ?)
+                `,
+                [
+                    req.user.id,
+                    req.params.id,
+                ]
+            );
+
+            res.json({
+                success: true,
+                message:
+                    "Reel liked",
+            });
+
+        } catch (error) {
+            res.status(400).json({
+                message:
+                    "Reel already liked",
+            });
+        }
+    }
+);
+
+/* =========================================================
+   UNLIKE REEL
+========================================================= */
+
+app.delete(
+    "/reels/:id/like",
+    auth,
+    async (req, res) => {
+        try {
+
+            await run(
+                `
+                DELETE FROM reel_likes
+
+                WHERE user_id = ?
+
+                AND reel_id = ?
+                `,
+                [
+                    req.user.id,
+                    req.params.id,
+                ]
+            );
+
+            res.json({
+                success: true,
+                message:
+                    "Reel unliked",
+            });
+
+        } catch (error) {
+            res.status(500).json({
+                message:
+                    "Failed to unlike reel",
+            });
+        }
+    }
+);
+
+/* =========================================================
+   SAVE REEL
+========================================================= */
+
+app.post(
+    "/reels/:id/save",
+    auth,
+    async (req, res) => {
+        try {
+
+            await run(
+                `
+                INSERT INTO saved_reels
+                (
+                    user_id,
+                    reel_id
+                )
+
+                VALUES (?, ?)
+                `,
+                [
+                    req.user.id,
+                    req.params.id,
+                ]
+            );
+
+            res.json({
+                success: true,
+                message:
+                    "Reel saved",
+            });
+
+        } catch (error) {
+            res.status(400).json({
+                message:
+                    "Reel already saved",
+            });
+        }
+    }
+);
+
+/* =========================================================
+   UNSAVE REEL
+========================================================= */
+
+app.delete(
+    "/reels/:id/save",
+    auth,
+    async (req, res) => {
+        try {
+
+            await run(
+                `
+                DELETE FROM saved_reels
+
+                WHERE user_id = ?
+
+                AND reel_id = ?
+                `,
+                [
+                    req.user.id,
+                    req.params.id,
+                ]
+            );
+
+            res.json({
+                success: true,
+                message:
+                    "Reel removed from saved",
+            });
+
+        } catch (error) {
+            res.status(500).json({
+                message:
+                    "Failed to unsave reel",
+            });
+        }
+    }
+);
+
+/* =========================================================
+   GET SAVED REELS
+========================================================= */
+
+app.get(
+    "/saved-reels",
+    auth,
+    async (req, res) => {
+        try {
+
+            const reels =
+                await all(
+                    `
+                    SELECT
+
+                        reels.*,
+
+                        users.name,
+
+                        users.photo,
+
+                        saved_reels.created_at
+                        AS saved_at
+
+                    FROM saved_reels
+
+                    JOIN reels
+
+                    ON reels.id =
+                       saved_reels.reel_id
+
+                    JOIN users
+
+                    ON users.id =
+                       reels.user_id
+
+                    WHERE
+                        saved_reels.user_id = ?
+
+                    ORDER BY
+                        saved_reels.created_at DESC
+                    `,
+                    [req.user.id]
+                );
+
+            res.json(reels);
+
+        } catch (error) {
+            res.status(500).json({
+                message:
+                    "Failed to load saved reels",
+            });
+        }
+    }
+);
+
+/* =========================================================
+   GET LIKED REELS
+========================================================= */
+
+app.get(
+    "/liked-reels",
+    auth,
+    async (req, res) => {
+        try {
+
+            const reels =
+                await all(
+                    `
+                    SELECT
+
+                        reels.*,
+
+                        users.name,
+
+                        users.photo,
+
+                        reel_likes.created_at
+                        AS liked_at
+
+                    FROM reel_likes
+
+                    JOIN reels
+
+                    ON reels.id =
+                       reel_likes.reel_id
+
+                    JOIN users
+
+                    ON users.id =
+                       reels.user_id
+
+                    WHERE
+                        reel_likes.user_id = ?
+
+                    ORDER BY
+                        reel_likes.created_at DESC
+                    `,
+                    [req.user.id]
+                );
+
+            res.json(reels);
+
+        } catch (error) {
+            res.status(500).json({
+                message:
+                    "Failed to load liked reels",
+            });
+        }
+    }
+);
+
+/* =========================================================
+   CREATE HIGHLIGHT
+========================================================= */
+
+app.post(
+    "/highlights",
+    auth,
+    async (req, res) => {
+        try {
+
+            const {
+                title,
+                cover_image,
+            } = req.body;
+
+            if (!title) {
+                return res.status(400).json({
+                    message:
+                        "Highlight title is required",
+                });
+            }
+
+            const result =
+                await run(
+                    `
+                    INSERT INTO highlights
+                    (
+                        user_id,
+                        title,
+                        cover_image
+                    )
+
+                    VALUES (?, ?, ?)
+                    `,
+                    [
+                        req.user.id,
+                        title,
+                        cover_image || "",
+                    ]
+                );
+
+            res.json({
+                success: true,
+                id:
+                    result.lastID,
+                message:
+                    "Highlight created",
+            });
+
+        } catch (error) {
+            res.status(500).json({
+                message:
+                    "Failed to create highlight",
+            });
+        }
+    }
+);
+
+/* =========================================================
+   GET USER HIGHLIGHTS
+========================================================= */
+
+app.get(
+    "/users/:id/highlights",
+    auth,
+    async (req, res) => {
+        try {
+
+            const highlights =
+                await all(
+                    `
+                    SELECT *
+
+                    FROM highlights
+
+                    WHERE user_id = ?
+
+                    ORDER BY
+                        created_at DESC
+                    `,
+                    [req.params.id]
+                );
+
+            res.json(highlights);
+
+        } catch (error) {
+            res.status(500).json({
+                message:
+                    "Failed to load highlights",
+            });
+        }
+    }
+);
+
+/* =========================================================
+   EDIT HIGHLIGHT
+========================================================= */
+
+app.put(
+    "/highlights/:id",
+    auth,
+    async (req, res) => {
+        try {
+
+            const {
+                title,
+                cover_image,
+            } = req.body;
+
+            await run(
+                `
+                UPDATE highlights
+
+                SET
+
+                    title = ?,
+
+                    cover_image = ?
+
+                WHERE id = ?
+
+                AND user_id = ?
+                `,
+                [
+                    title,
+                    cover_image || "",
+                    req.params.id,
+                    req.user.id,
+                ]
+            );
+
+            res.json({
+                success: true,
+                message:
+                    "Highlight updated",
+            });
+
+        } catch (error) {
+            res.status(500).json({
+                message:
+                    "Failed to update highlight",
+            });
+        }
+    }
+);
+
+/* =========================================================
+   DELETE HIGHLIGHT
+========================================================= */
+
+app.delete(
+    "/highlights/:id",
+    auth,
+    async (req, res) => {
+        try {
+
+            await run(
+                `
+                DELETE FROM highlights
+
+                WHERE id = ?
+
+                AND user_id = ?
+                `,
+                [
+                    req.params.id,
+                    req.user.id,
+                ]
+            );
+
+            await run(
+                `
+                DELETE FROM highlight_reels
+
+                WHERE highlight_id = ?
+                `,
+                [req.params.id]
+            );
+
+            res.json({
+                success: true,
+                message:
+                    "Highlight deleted",
+            });
+
+        } catch (error) {
+            res.status(500).json({
+                message:
+                    "Failed to delete highlight",
+            });
+        }
+    }
+);
+
+/* =========================================================
+   ADD REEL TO HIGHLIGHT
+========================================================= */
+
+app.post(
+    "/highlights/:id/reels/:reelId",
+    auth,
+    async (req, res) => {
+        try {
+
+            const highlight =
+                await get(
+                    `
+                    SELECT *
+
+                    FROM highlights
+
+                    WHERE id = ?
+
+                    AND user_id = ?
+                    `,
+                    [
+                        req.params.id,
+                        req.user.id,
+                    ]
+                );
+
+            if (!highlight) {
+                return res.status(404).json({
+                    message:
+                        "Highlight not found",
+                });
+            }
+
+            await run(
+                `
+                INSERT INTO highlight_reels
+                (
+                    highlight_id,
+                    reel_id
+                )
+
+                VALUES (?, ?)
+                `,
+                [
+                    req.params.id,
+                    req.params.reelId,
+                ]
+            );
+
+            res.json({
+                success: true,
+                message:
+                    "Reel added to highlight",
+            });
+
+        } catch (error) {
+            res.status(400).json({
+                message:
+                    "Reel already in highlight",
+            });
+        }
+    }
+);
+
+/* =========================================================
+   REMOVE REEL FROM HIGHLIGHT
+========================================================= */
+
+app.delete(
+    "/highlights/:id/reels/:reelId",
+    auth,
+    async (req, res) => {
+        try {
+
+            await run(
+                `
+                DELETE FROM highlight_reels
+
+                WHERE highlight_id = ?
+
+                AND reel_id = ?
+                `,
+                [
+                    req.params.id,
+                    req.params.reelId,
+                ]
+            );
+
+            res.json({
+                success: true,
+                message:
+                    "Reel removed from highlight",
+            });
+
+        } catch (error) {
+            res.status(500).json({
+                message:
+                    "Failed to remove reel",
+            });
+        }
+    }
+);
+
+/* =========================================================
+   GET HIGHLIGHT REELS
+========================================================= */
+
+app.get(
+    "/highlights/:id/reels",
+    auth,
+    async (req, res) => {
+        try {
+
+            const reels =
+                await all(
+                    `
+                    SELECT
+                        reels.*
+
+                    FROM highlight_reels
+
+                    JOIN reels
+
+                    ON reels.id =
+                       highlight_reels.reel_id
+
+                    WHERE
+                        highlight_reels.highlight_id = ?
+
+                    ORDER BY
+                        reels.created_at DESC
+                    `,
+                    [req.params.id]
+                );
+
+            res.json(reels);
+
+        } catch (error) {
+            res.status(500).json({
+                message:
+                    "Failed to load highlight reels",
+            });
+        }
+    }
+);
+
+/* =========================================================
+   TRIP LIKE
 ========================================================= */
 
 app.post(
     "/like/:id",
     auth,
     async (req, res) => {
-
         try {
 
             await run(
@@ -1949,28 +3564,22 @@ app.post(
             });
 
         } catch (error) {
-
             res.status(400).json({
                 message:
-                    "Already liked broo",
-                error:
-                    error.message,
+                    "Already liked",
             });
-
         }
-
     }
 );
 
 /* =========================================================
-   UNLIKE
+   TRIP UNLIKE
 ========================================================= */
 
 app.delete(
     "/unlike/:id",
     auth,
     async (req, res) => {
-
         try {
 
             await run(
@@ -1994,27 +3603,21 @@ app.delete(
             });
 
         } catch (error) {
-
             res.status(500).json({
                 message:
-                    "Database error",
-                error:
-                    error.message,
+                    "Unable to unlike",
             });
-
         }
-
     }
 );
 
 /* =========================================================
-   LIKE COUNT
+   LIKES COUNT
 ========================================================= */
 
 app.get(
     "/likes-count/:id",
     async (req, res) => {
-
         try {
 
             const row =
@@ -2033,16 +3636,11 @@ app.get(
             res.json(row);
 
         } catch (error) {
-
             res.status(500).json({
                 message:
                     "Database error",
-                error:
-                    error.message,
             });
-
         }
-
     }
 );
 
@@ -2054,7 +3652,6 @@ app.get(
     "/check-like/:id",
     auth,
     async (req, res) => {
-
         try {
 
             const row =
@@ -2080,16 +3677,11 @@ app.get(
             });
 
         } catch (error) {
-
             res.status(500).json({
                 message:
                     "Database error",
-                error:
-                    error.message,
             });
-
         }
-
     }
 );
 
@@ -2101,7 +3693,6 @@ app.post(
     "/comments/:tripId",
     auth,
     async (req, res) => {
-
         try {
 
             const comment =
@@ -2110,12 +3701,10 @@ app.post(
                 ).trim();
 
             if (!comment) {
-
                 return res.status(400).json({
                     message:
                         "Comment cannot be empty",
                 });
-
             }
 
             const result =
@@ -2138,36 +3727,21 @@ app.post(
                 );
 
             res.json({
-
                 success: true,
-
-                message:
-                    "Comment Added",
 
                 id:
                     result.lastID,
 
-                loggedUserId:
-                    req.user.id,
-
+                message:
+                    "Comment added",
             });
 
         } catch (error) {
-
-            console.error(
-                "Comment error:",
-                error
-            );
-
             res.status(500).json({
                 message:
-                    "Database Error",
-                error:
-                    error.message,
+                    "Failed to add comment",
             });
-
         }
-
     }
 );
 
@@ -2178,7 +3752,6 @@ app.post(
 app.get(
     "/comments/:tripId",
     async (req, res) => {
-
         try {
 
             const rows =
@@ -2192,7 +3765,8 @@ app.get(
 
                         comments.created_at,
 
-                        users.id AS user_id,
+                        users.id
+                        AS user_id,
 
                         users.name,
 
@@ -2205,7 +3779,8 @@ app.get(
                     ON comments.user_id =
                        users.id
 
-                    WHERE comments.trip_id = ?
+                    WHERE
+                        comments.trip_id = ?
 
                     ORDER BY
                         comments.created_at DESC
@@ -2216,54 +3791,11 @@ app.get(
             res.json(rows);
 
         } catch (error) {
-
-            console.error(
-                "Comments error:",
-                error
-            );
-
             res.status(500).json({
                 message:
-                    "Database Error",
-                error:
-                    error.message,
+                    "Failed to load comments",
             });
-
         }
-
-    }
-);
-
-/* =========================================================
-   COMMENTS DEBUG
-========================================================= */
-
-app.get(
-    "/comments-debug",
-    async (req, res) => {
-
-        try {
-
-            const rows =
-                await all(`
-                    SELECT *
-                    FROM comments
-                    ORDER BY id DESC
-                `);
-
-            res.json(rows);
-
-        } catch (error) {
-
-            res.status(500).json({
-                message:
-                    "Database Error",
-                error:
-                    error.message,
-            });
-
-        }
-
     }
 );
 
@@ -2281,16 +3813,16 @@ app.use(
 
         res.status(500).json({
             success: false,
+
             message:
                 err.message ||
                 "Internal Server Error",
         });
-
     }
 );
 
 /* =========================================================
-   START SERVER ONLY AFTER DATABASE IS READY
+   START SERVER
 ========================================================= */
 
 async function startServer() {
@@ -2312,16 +3844,14 @@ async function startServer() {
                 );
 
                 console.log(
-                    `🌍 Environment: ${
-                        process.env.NODE_ENV ||
-                        "development"
+                    `🌍 Environment: ${process.env.NODE_ENV ||
+                    "development"
                     }`
                 );
 
                 console.log(
                     "================================="
                 );
-
             }
         );
 
@@ -2336,9 +3866,7 @@ async function startServer() {
         );
 
         process.exit(1);
-
     }
-
 }
 
 startServer();
@@ -2350,23 +3878,19 @@ startServer();
 process.on(
     "uncaughtException",
     (error) => {
-
         console.error(
             "❌ Uncaught Exception:",
             error
         );
-
     }
 );
 
 process.on(
     "unhandledRejection",
     (reason) => {
-
         console.error(
             "❌ Unhandled Rejection:",
             reason
         );
-
     }
 );
