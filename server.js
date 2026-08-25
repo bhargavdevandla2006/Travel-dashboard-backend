@@ -3581,39 +3581,90 @@ app.get(
 );
 
 /* =========================================================
-   TRIP LIKE
+   TRIP LIKE / UNLIKE TOGGLE
 ========================================================= */
 
 app.post("/like/:id", auth, async (req, res) => {
     try {
 
-        // 1. Add like
-        await run(
+        const userId = req.user.id;
+        const tripId = req.params.id;
+
+        // Check whether user already liked this trip
+        const existingLike = await get(
             `
-            INSERT INTO likes (user_id, trip_id)
-            VALUES (?, ?)
+            SELECT id
+            FROM likes
+            WHERE user_id = ?
+            AND trip_id = ?
             `,
-            [
-                req.user.id,
-                req.params.id
-            ]
+            [userId, tripId]
         );
 
-        // 2. Get trip owner
+        // ================================================
+        // ALREADY LIKED → UNLIKE
+        // ================================================
+
+        if (existingLike) {
+
+            await run(
+                `
+                DELETE FROM likes
+                WHERE user_id = ?
+                AND trip_id = ?
+                `,
+                [userId, tripId]
+            );
+
+            // Get updated count
+            const count = await get(
+                `
+                SELECT COUNT(*) AS count
+                FROM likes
+                WHERE trip_id = ?
+                `,
+                [tripId]
+            );
+
+            return res.json({
+                success: true,
+                liked: false,
+                count: count.count
+            });
+        }
+
+        // ================================================
+        // NOT LIKED → LIKE
+        // ================================================
+
+        await run(
+            `
+            INSERT INTO likes
+            (
+                user_id,
+                trip_id
+            )
+            VALUES (?, ?)
+            `,
+            [userId, tripId]
+        );
+
+        // Get trip owner
         const trip = await get(
             `
             SELECT user_id, title
             FROM trips
             WHERE id = ?
             `,
-            [req.params.id]
+            [tripId]
         );
 
-        // 3. Create notification
+        // Create notification
         if (
             trip &&
-            Number(trip.user_id) !== Number(req.user.id)
+            Number(trip.user_id) !== Number(userId)
         ) {
+
             await run(
                 `
                 INSERT INTO notifications
@@ -3634,136 +3685,100 @@ app.post("/like/:id", auth, async (req, res) => {
             );
         }
 
-        // 4. Send response
-        res.json({
+        // Get updated count
+        const count = await get(
+            `
+            SELECT COUNT(*) AS count
+            FROM likes
+            WHERE trip_id = ?
+            `,
+            [tripId]
+        );
+
+        return res.json({
             success: true,
-            message: "Liked successfully"
+            liked: true,
+            count: count.count
         });
 
     } catch (error) {
 
-        console.error("LIKE ERROR:", error);
+        console.error("LIKE TOGGLE ERROR:", error);
 
-        res.status(400).json({
+        return res.status(500).json({
             success: false,
-            message: "Already liked"
+            message: "Unable to like/unlike trip"
         });
     }
 });
 
-/* =========================================================
-   TRIP UNLIKE
-========================================================= */
-
-app.delete(
-    "/unlike/:id",
-    auth,
-    async (req, res) => {
-        try {
-
-            await run(
-                `
-                DELETE FROM likes
-
-                WHERE user_id = ?
-
-                AND trip_id = ?
-                `,
-                [
-                    req.user.id,
-                    req.params.id,
-                ]
-            );
-
-            res.json({
-                success: true,
-                message:
-                    "Unliked successfully",
-            });
-
-        } catch (error) {
-            res.status(500).json({
-                message:
-                    "Unable to unlike",
-            });
-        }
-    }
-);
-
-/* =========================================================
-   LIKES COUNT
-========================================================= */
-
-app.get(
-    "/likes-count/:id",
-    async (req, res) => {
-        try {
-
-            const row =
-                await get(
-                    `
-                    SELECT
-                        COUNT(*) AS count
-
-                    FROM likes
-
-                    WHERE trip_id = ?
-                    `,
-                    [req.params.id]
-                );
-
-            res.json(row);
-
-        } catch (error) {
-            res.status(500).json({
-                message:
-                    "Database error",
-            });
-        }
-    }
-);
 
 /* =========================================================
    CHECK LIKE
 ========================================================= */
 
-app.get(
-    "/check-like/:id",
-    auth,
-    async (req, res) => {
-        try {
+app.get("/check-like/:id", auth, async (req, res) => {
 
-            const row =
-                await get(
-                    `
-                    SELECT id
+    try {
 
-                    FROM likes
+        const row = await get(
+            `
+            SELECT id
+            FROM likes
+            WHERE user_id = ?
+            AND trip_id = ?
+            `,
+            [
+                req.user.id,
+                req.params.id
+            ]
+        );
 
-                    WHERE user_id = ?
+        res.json({
+            liked: !!row
+        });
 
-                    AND trip_id = ?
-                    `,
-                    [
-                        req.user.id,
-                        req.params.id,
-                    ]
-                );
+    } catch (error) {
 
-            res.json({
-                liked:
-                    !!row,
-            });
+        console.error("CHECK LIKE ERROR:", error);
 
-        } catch (error) {
-            res.status(500).json({
-                message:
-                    "Database error",
-            });
-        }
+        res.status(500).json({
+            message: "Database error"
+        });
     }
-);
+});
 
+
+/* =========================================================
+   LIKES COUNT
+========================================================= */
+
+app.get("/likes-count/:id", async (req, res) => {
+
+    try {
+
+        const row = await get(
+            `
+            SELECT COUNT(*) AS count
+            FROM likes
+            WHERE trip_id = ?
+            `,
+            [req.params.id]
+        );
+
+        res.json({
+            count: Number(row.count || 0)
+        });
+
+    } catch (error) {
+
+        console.error("LIKES COUNT ERROR:", error);
+
+        res.status(500).json({
+            message: "Database error"
+        });
+    }
+});
 /* =========================================================
    ADD COMMENT
 ========================================================= */
