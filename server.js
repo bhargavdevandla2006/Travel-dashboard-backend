@@ -27,25 +27,25 @@ const isProduction =
     process.env.NODE_ENV === "production";
 
 const allowedOrigins = [
-  "http://localhost:5173",
-  "http://localhost:5174",
-  "http://127.0.0.1:5173",
-  "http://127.0.0.1:5174",
-  "https://travel-dashboard-sklj.vercel.app",
-  "https://travel-dashboard-lnfg.vercel.app"
+    "http://localhost:5173",
+    "http://localhost:5174",
+    "http://127.0.0.1:5173",
+    "http://127.0.0.1:5174",
+    "https://travel-dashboard-sklj.vercel.app",
+    "https://travel-dashboard-lnfg.vercel.app"
 ];
 
 app.use(
-  cors({
-    origin: function (origin, callback) {
-      if (!origin || allowedOrigins.includes(origin)) {
-        callback(null, true);
-      } else {
-        callback(new Error("Not allowed by CORS"));
-      }
-    },
-    credentials: true
-  })
+    cors({
+        origin: function (origin, callback) {
+            if (!origin || allowedOrigins.includes(origin)) {
+                callback(null, true);
+            } else {
+                callback(new Error("Not allowed by CORS"));
+            }
+        },
+        credentials: true
+    })
 );
 
 /* =========================================================
@@ -307,6 +307,16 @@ async function initializeDatabase() {
         )
     `);
 
+    db.run(`
+  CREATE TABLE IF NOT EXISTS notifications (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL,
+    type TEXT NOT NULL,
+    title TEXT NOT NULL,
+    message TEXT,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  )
+`);
     /* =====================================================
        DESTINATIONS
     ===================================================== */
@@ -1994,6 +2004,31 @@ app.get(
     }
 );
 
+
+app.get("/notifications", auth, (req, res) => {
+  db.all(
+    `
+    SELECT *
+    FROM notifications
+    WHERE user_id = ?
+    ORDER BY created_at DESC
+    LIMIT 10
+    `,
+    [req.user.id],
+    (err, notifications) => {
+      if (err) {
+        return res.status(500).json({
+          error: err.message
+        });
+      }
+
+      res.json(notifications);
+    }
+  );
+});
+
+
+
 /* =========================================================
    CLOSE FRIENDS
 ========================================================= */
@@ -3549,42 +3584,72 @@ app.get(
    TRIP LIKE
 ========================================================= */
 
-app.post(
-    "/like/:id",
-    auth,
-    async (req, res) => {
-        try {
+app.post("/like/:id", auth, async (req, res) => {
+    try {
 
+        // 1. Add like
+        await run(
+            `
+            INSERT INTO likes (user_id, trip_id)
+            VALUES (?, ?)
+            `,
+            [
+                req.user.id,
+                req.params.id
+            ]
+        );
+
+        // 2. Get trip owner
+        const trip = await get(
+            `
+            SELECT user_id, title
+            FROM trips
+            WHERE id = ?
+            `,
+            [req.params.id]
+        );
+
+        // 3. Create notification
+        if (
+            trip &&
+            Number(trip.user_id) !== Number(req.user.id)
+        ) {
             await run(
                 `
-                INSERT INTO likes
+                INSERT INTO notifications
                 (
                     user_id,
-                    trip_id
+                    type,
+                    title,
+                    message
                 )
-
-                VALUES (?, ?)
+                VALUES (?, ?, ?, ?)
                 `,
                 [
-                    req.user.id,
-                    req.params.id,
+                    trip.user_id,
+                    "like",
+                    "❤️ Someone liked your trip!",
+                    `Your "${trip.title}" trip received a new like.`
                 ]
             );
-
-            res.json({
-                success: true,
-                message:
-                    "Liked successfully",
-            });
-
-        } catch (error) {
-            res.status(400).json({
-                message:
-                    "Already liked",
-            });
         }
+
+        // 4. Send response
+        res.json({
+            success: true,
+            message: "Liked successfully"
+        });
+
+    } catch (error) {
+
+        console.error("LIKE ERROR:", error);
+
+        res.status(400).json({
+            success: false,
+            message: "Already liked"
+        });
     }
-);
+});
 
 /* =========================================================
    TRIP UNLIKE
@@ -3834,7 +3899,55 @@ app.use(
         });
     }
 );
+/* =========================================================
+   GET NOTIFICATIONS
+========================================================= */
 
+app.get(
+    "/notifications",
+    auth,
+    async (req, res) => {
+        try {
+
+            const notifications = await all(
+                `
+                SELECT
+                    id,
+                    type,
+                    title,
+                    message,
+                    is_read,
+                    created_at
+
+                FROM notifications
+
+                WHERE user_id = ?
+
+                ORDER BY created_at DESC
+                `,
+                [req.user.id]
+            );
+
+            res.json({
+                success: true,
+                notifications
+            });
+
+        } catch (error) {
+
+            console.error(
+                "GET NOTIFICATIONS ERROR:",
+                error
+            );
+
+            res.status(500).json({
+                success: false,
+                message:
+                    "Failed to load notifications"
+            });
+        }
+    }
+);
 /* =========================================================
    START SERVER
 ========================================================= */
