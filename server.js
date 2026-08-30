@@ -100,9 +100,6 @@ const db = new sqlite3.Database(
     }
 );
 
-/* =========================================================
-   RAZORPAY
-========================================================= */
 
 let razorpay = null;
 
@@ -185,9 +182,6 @@ function get(sql, params = []) {
     });
 }
 
-/* =========================================================
-   DATABASE INITIALIZATION
-========================================================= */
 
 async function initializeDatabase() {
 
@@ -195,9 +189,6 @@ async function initializeDatabase() {
     console.log("🔧 Initializing SQLite database");
     console.log("=================================");
 
-    /* =====================================================
-       USERS
-    ===================================================== */
 
     await run(`
         CREATE TABLE IF NOT EXISTS users (
@@ -236,31 +227,33 @@ async function initializeDatabase() {
             )
         );
 
-    const userMigrations = [
+const userMigrations = [
 
-        ["city", "TEXT DEFAULT 'Hyderabad'"],
+    ["city", "TEXT DEFAULT 'Hyderabad'"],
 
-        ["state", "TEXT DEFAULT 'Telangana'"],
+    ["state", "TEXT DEFAULT 'Telangana'"],
 
-        ["country", "TEXT DEFAULT 'India'"],
+    ["country", "TEXT DEFAULT 'India'"],
 
-        [
-            "photo",
-            "TEXT DEFAULT 'https://i.pravatar.cc/150'"
-        ],
+    [
+        "photo",
+        "TEXT DEFAULT 'https://i.pravatar.cc/150'"
+    ],
 
-        ["updated_at", "TEXT"],
+    ["updated_at", "TEXT"],
 
-        ["instagram", "TEXT DEFAULT ''"],
-        ["facebook", "TEXT DEFAULT ''"],
-        ["twitter", "TEXT DEFAULT ''"],
-        ["linkedin", "TEXT DEFAULT ''"],
-        ["youtube", "TEXT DEFAULT ''"],
-        ["tiktok", "TEXT DEFAULT ''"],
-        ["website", "TEXT DEFAULT ''"],
+    ["instagram", "TEXT DEFAULT ''"],
+    ["facebook", "TEXT DEFAULT ''"],
+    ["twitter", "TEXT DEFAULT ''"],
+    ["linkedin", "TEXT DEFAULT ''"],
+    ["youtube", "TEXT DEFAULT ''"],
+    ["tiktok", "TEXT DEFAULT ''"],
+    ["website", "TEXT DEFAULT ''"],
 
-        ["is_private", "INTEGER DEFAULT 0"],
-    ];
+    ["is_private", "INTEGER DEFAULT 0"],
+    ["face_descriptor", "TEXT"],
+    ["face_browser_id", "TEXT"],
+];
 
     for (
         const [column, definition]
@@ -314,9 +307,27 @@ async function initializeDatabase() {
     type TEXT NOT NULL,
     title TEXT NOT NULL,
     message TEXT,
+    is_read INTEGER DEFAULT 0,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
   )
 `);
+
+const notificationColumns =
+    await all("PRAGMA table_info(notifications)");
+
+const existingNotificationColumns =
+    new Set(
+        notificationColumns.map(column => column.name)
+    );
+
+if (!existingNotificationColumns.has("is_read")) {
+    await run(`
+        ALTER TABLE notifications
+        ADD COLUMN is_read INTEGER DEFAULT 0
+    `);
+
+    console.log("✅ Added notifications.is_read");
+}
     /* =====================================================
        DESTINATIONS
     ===================================================== */
@@ -2005,27 +2016,45 @@ app.get(
 );
 
 
-app.get("/notifications", auth, (req, res) => {
-  db.all(
-    `
-    SELECT *
-    FROM notifications
-    WHERE user_id = ?
-    ORDER BY created_at DESC
-    LIMIT 10
-    `,
-    [req.user.id],
-    (err, notifications) => {
-      if (err) {
-        return res.status(500).json({
-          error: err.message
-        });
-      }
+app.get(
+    "/notifications",
+    auth,
+    async (req, res) => {
+        try {
+            const notifications = await all(
+                `
+                SELECT
+                    id,
+                    type,
+                    title,
+                    message,
+                    is_read,
+                    created_at
+                FROM notifications
+                WHERE user_id = ?
+                ORDER BY created_at DESC
+                `,
+                [req.user.id]
+            );
 
-      res.json(notifications);
+            res.json({
+                success: true,
+                notifications
+            });
+
+        } catch (error) {
+            console.error(
+                "GET NOTIFICATIONS ERROR:",
+                error
+            );
+
+            res.status(500).json({
+                success: false,
+                message: "Failed to load notifications"
+            });
+        }
     }
-  );
-});
+);
 
 
 
@@ -3892,6 +3921,69 @@ app.get(
         }
     }
 );
+
+/* =========================================================
+   FACE LOGIN
+========================================================= */
+
+app.post("/face-login", async (req, res) => {
+    try {
+
+        const { browserId } = req.body;
+
+        if (!browserId) {
+            return res.status(400).json({
+                success: false,
+                message: "Browser ID is required"
+            });
+        }
+
+        const user = await get(
+            `
+            SELECT id, name, email
+            FROM users
+            WHERE face_browser_id = ?
+            `,
+            [browserId]
+        );
+
+        if (!user) {
+            return res.status(401).json({
+                success: false,
+                message: "Face authentication not registered"
+            });
+        }
+
+        const token = jwt.sign(
+            {
+                id: user.id
+            },
+            SECRET,
+            {
+                expiresIn: "7d"
+            }
+        );
+
+        setAuthCookies(res, token);
+
+        res.json({
+            success: true,
+            userId: user.id,
+            name: user.name,
+            email: user.email,
+            message: "Face login successful"
+        });
+
+    } catch (error) {
+
+        console.error("FACE LOGIN ERROR:", error);
+
+        res.status(500).json({
+            success: false,
+            message: "Face login failed"
+        });
+    }
+});
 
 /* =========================================================
    ERROR HANDLER
