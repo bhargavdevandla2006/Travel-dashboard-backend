@@ -1006,66 +1006,44 @@ app.post(
 
             const {
                 email,
-                password,
-                browserId
+                password
             } = req.body;
 
-            const user =
-                await get(
-                    `
-                    SELECT *
-                    FROM users
-                    WHERE email = ?
-                    `,
-                    [email]
-                );
+            const user = await get(
+                `
+                SELECT *
+                FROM users
+                WHERE email = ?
+                `,
+                [email]
+            );
 
             if (!user) {
                 return res.status(400).json({
-                    message:
-                        "Invalid Email",
+                    message: "Invalid Email",
                 });
             }
 
-            const valid =
-                await bcrypt.compare(
-                    password,
-                    user.password
-                );
+            const valid = await bcrypt.compare(
+                password,
+                user.password
+            );
 
             if (!valid) {
                 return res.status(400).json({
-                    message:
-                        "Invalid password",
+                    message: "Invalid password",
                 });
             }
 
-            if (browserId) {
-    await run(
-        `
-        UPDATE users
-        SET face_browser_id = ?
-        WHERE id = ?
-        `,
-        [
-            browserId,
-            user.id
-        ]
-    );
-}
-
-            const token =
-                jwt.sign(
-                    {
-                        id:
-                            user.id,
-                    },
-                    SECRET,
-                    {
-                        expiresIn:
-                            "7d",
-                    }
-                );
+            const token = jwt.sign(
+                {
+                    id: user.id,
+                },
+                SECRET,
+                {
+                    expiresIn: "7d",
+                }
+            );
 
             setAuthCookies(
                 res,
@@ -1074,18 +1052,20 @@ app.post(
 
             res.json({
                 success: true,
-                userId:
-                    user.id,
-                message:
-                    "Login successfully",
+                userId: user.id,
+                message: "Login successfully",
             });
 
         } catch (error) {
+
+            console.error(
+                "LOGIN ERROR:",
+                error
+            );
+
             res.status(500).json({
-                message:
-                    "Login failed",
-                error:
-                    error.message,
+                message: "Login failed",
+                error: error.message,
             });
         }
     }
@@ -3994,10 +3974,20 @@ app.get(
    FACE LOGIN
 ========================================================= */
 
+/* =========================================================
+   FACE LOGIN
+========================================================= */
+
 app.post("/face-login", async (req, res) => {
     try {
 
-        const { browserId } = req.body;
+        const { browserId, faceDescriptor } = req.body;
+
+        console.log("=================================");
+        console.log("FACE LOGIN");
+        console.log("Browser ID:", browserId);
+        console.log("Face descriptor exists:", !!faceDescriptor);
+        console.log("=================================");
 
         if (!browserId) {
             return res.status(400).json({
@@ -4008,12 +3998,14 @@ app.post("/face-login", async (req, res) => {
 
         const user = await get(
             `
-            SELECT id, name, email
+            SELECT id, name, email, face_browser_id, face_descriptor
             FROM users
             WHERE face_browser_id = ?
             `,
             [browserId]
         );
+
+        console.log("USER FOUND:", user);
 
         if (!user) {
             return res.status(401).json({
@@ -4044,7 +4036,10 @@ app.post("/face-login", async (req, res) => {
 
     } catch (error) {
 
-        console.error("FACE LOGIN ERROR:", error);
+        console.error(
+            "FACE LOGIN ERROR:",
+            error
+        );
 
         res.status(500).json({
             success: false,
