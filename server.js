@@ -3978,16 +3978,31 @@ app.get(
    FACE LOGIN
 ========================================================= */
 
+/* =========================================================
+   FACE LOGIN
+========================================================= */
+
 app.post("/face-login", async (req, res) => {
     try {
 
-        const { browserId, faceDescriptor } = req.body;
+        const {
+            browserId,
+            faceDescriptor
+        } = req.body;
 
         console.log("=================================");
         console.log("FACE LOGIN");
         console.log("Browser ID:", browserId);
-        console.log("Face descriptor exists:", !!faceDescriptor);
+        console.log(
+            "Face descriptor exists:",
+            !!faceDescriptor
+        );
         console.log("=================================");
+
+
+        // ==========================================
+        // CHECK REQUIRED DATA
+        // ==========================================
 
         if (!browserId) {
             return res.status(400).json({
@@ -3996,9 +4011,26 @@ app.post("/face-login", async (req, res) => {
             });
         }
 
+        if (!faceDescriptor) {
+            return res.status(400).json({
+                success: false,
+                message: "Face descriptor is required"
+            });
+        }
+
+
+        // ==========================================
+        // FIND USER USING BROWSER ID
+        // ==========================================
+
         const user = await get(
             `
-            SELECT id, name, email, face_browser_id, face_descriptor
+            SELECT
+                id,
+                name,
+                email,
+                face_browser_id,
+                face_descriptor
             FROM users
             WHERE face_browser_id = ?
             `,
@@ -4007,12 +4039,122 @@ app.post("/face-login", async (req, res) => {
 
         console.log("USER FOUND:", user);
 
+
+        // ==========================================
+        // USER NOT FOUND
+        // ==========================================
+
         if (!user) {
             return res.status(401).json({
                 success: false,
-                message: "Face authentication not registered"
+                message:
+                    "Face authentication not registered on this browser"
             });
         }
+
+
+        // ==========================================
+        // CHECK SAVED FACE
+        // ==========================================
+
+        if (!user.face_descriptor) {
+            return res.status(401).json({
+                success: false,
+                message:
+                    "Face authentication is not registered"
+            });
+        }
+
+
+        // ==========================================
+        // FACE DESCRIPTOR COMPARISON
+        // ==========================================
+
+        const savedFace =
+            JSON.parse(user.face_descriptor);
+
+        const currentFace =
+            faceDescriptor;
+
+
+        if (
+            !Array.isArray(savedFace) ||
+            !Array.isArray(currentFace)
+        ) {
+            return res.status(401).json({
+                success: false,
+                message:
+                    "Invalid face data"
+            });
+        }
+
+
+        if (
+            savedFace.length !==
+            currentFace.length
+        ) {
+            return res.status(401).json({
+                success: false,
+                message:
+                    "Invalid face descriptor"
+            });
+        }
+
+
+        // ==========================================
+        // CALCULATE FACE DISTANCE
+        // ==========================================
+
+        let sum = 0;
+
+        for (
+            let i = 0;
+            i < savedFace.length;
+            i++
+        ) {
+
+            const difference =
+                savedFace[i] -
+                currentFace[i];
+
+            sum +=
+                difference *
+                difference;
+        }
+
+        const distance =
+            Math.sqrt(sum);
+
+
+        console.log(
+            "Face distance:",
+            distance
+        );
+
+
+        // ==========================================
+        // FACE MATCH THRESHOLD
+        // ==========================================
+
+        const FACE_THRESHOLD = 0.6;
+
+
+        if (
+            distance >
+            FACE_THRESHOLD
+        ) {
+
+            return res.status(401).json({
+                success: false,
+                message:
+                    "Face does not match"
+            });
+        }
+
+
+        // ==========================================
+        // CREATE JWT
+        // ==========================================
 
         const token = jwt.sign(
             {
@@ -4024,15 +4166,30 @@ app.post("/face-login", async (req, res) => {
             }
         );
 
-        setAuthCookies(res, token);
+
+        // ==========================================
+        // SET COOKIE
+        // ==========================================
+
+        setAuthCookies(
+            res,
+            token
+        );
+
+
+        // ==========================================
+        // SUCCESS
+        // ==========================================
 
         res.json({
             success: true,
             userId: user.id,
             name: user.name,
             email: user.email,
-            message: "Face login successful"
+            message:
+                "Face login successful"
         });
+
 
     } catch (error) {
 
@@ -4043,7 +4200,10 @@ app.post("/face-login", async (req, res) => {
 
         res.status(500).json({
             success: false,
-            message: "Face login failed"
+            message:
+                "Face login failed",
+            error:
+                error.message
         });
     }
 });
