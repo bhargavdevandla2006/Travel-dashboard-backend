@@ -216,33 +216,33 @@ async function initializeDatabase() {
             )
         );
 
-const userMigrations = [
+    const userMigrations = [
 
-    ["city", "TEXT DEFAULT 'Hyderabad'"],
+        ["city", "TEXT DEFAULT 'Hyderabad'"],
 
-    ["state", "TEXT DEFAULT 'Telangana'"],
+        ["state", "TEXT DEFAULT 'Telangana'"],
 
-    ["country", "TEXT DEFAULT 'India'"],
+        ["country", "TEXT DEFAULT 'India'"],
 
-    [
-        "photo",
-        "TEXT DEFAULT 'https://i.pravatar.cc/150'"
-    ],
+        [
+            "photo",
+            "TEXT DEFAULT 'https://i.pravatar.cc/150'"
+        ],
 
-    ["updated_at", "TEXT"],
+        ["updated_at", "TEXT"],
 
-    ["instagram", "TEXT DEFAULT ''"],
-    ["facebook", "TEXT DEFAULT ''"],
-    ["twitter", "TEXT DEFAULT ''"],
-    ["linkedin", "TEXT DEFAULT ''"],
-    ["youtube", "TEXT DEFAULT ''"],
-    ["tiktok", "TEXT DEFAULT ''"],
-    ["website", "TEXT DEFAULT ''"],
+        ["instagram", "TEXT DEFAULT ''"],
+        ["facebook", "TEXT DEFAULT ''"],
+        ["twitter", "TEXT DEFAULT ''"],
+        ["linkedin", "TEXT DEFAULT ''"],
+        ["youtube", "TEXT DEFAULT ''"],
+        ["tiktok", "TEXT DEFAULT ''"],
+        ["website", "TEXT DEFAULT ''"],
 
-    ["is_private", "INTEGER DEFAULT 0"],
-    ["face_descriptor", "TEXT"],
-    ["face_browser_id", "TEXT"],
-];
+        ["is_private", "INTEGER DEFAULT 0"],
+        ["face_descriptor", "TEXT"],
+        ["face_browser_id", "TEXT"],
+    ];
 
     for (
         const [column, definition]
@@ -301,22 +301,22 @@ const userMigrations = [
   )
 `);
 
-const notificationColumns =
-    await all("PRAGMA table_info(notifications)");
+    const notificationColumns =
+        await all("PRAGMA table_info(notifications)");
 
-const existingNotificationColumns =
-    new Set(
-        notificationColumns.map(column => column.name)
-    );
+    const existingNotificationColumns =
+        new Set(
+            notificationColumns.map(column => column.name)
+        );
 
-if (!existingNotificationColumns.has("is_read")) {
-    await run(`
+    if (!existingNotificationColumns.has("is_read")) {
+        await run(`
         ALTER TABLE notifications
         ADD COLUMN is_read INTEGER DEFAULT 0
     `);
 
-    console.log("✅ Added notifications.is_read");
-}
+        console.log("✅ Added notifications.is_read");
+    }
     /* =====================================================
        DESTINATIONS
     ===================================================== */
@@ -828,108 +828,172 @@ app.post(
    REGISTER
 ========================================================= */
 
-app.post(
-    "/register",
-    async (req, res) => {
-        try {
+app.post("/register", async (req, res) => {
+    try {
 
-            const {
+        const {
+            name,
+            email,
+            password,
+            faceDescriptor,
+            browserId
+        } = req.body;
+
+
+        // ==========================================
+        // CHECK REQUIRED FIELDS
+        // ==========================================
+
+        if (!name || !email || !password) {
+            return res.status(400).json({
+                success: false,
+                message: "Name, email and password are required"
+            });
+        }
+
+
+        // ==========================================
+        // CHECK FACE REGISTRATION
+        // ==========================================
+
+        if (!faceDescriptor) {
+            return res.status(400).json({
+                success: false,
+                message: "Face authentication is required"
+            });
+        }
+
+        if (!browserId) {
+            return res.status(400).json({
+                success: false,
+                message: "Browser ID is required"
+            });
+        }
+
+
+        // ==========================================
+        // HASH PASSWORD
+        // ==========================================
+
+        const hashedPassword = await bcrypt.hash(
+            password,
+            10
+        );
+
+
+        // ==========================================
+        // SAVE USER
+        // ==========================================
+
+        const result = await run(
+            `
+            INSERT INTO users
+            (
                 name,
                 email,
                 password,
-            } = req.body;
+                face_descriptor,
+                face_browser_id,
+                updated_at
+            )
 
-            if (
-                !name ||
-                !email ||
-                !password
-            ) {
-                return res.status(400).json({
-                    message:
-                        "Name, email and password are required",
-                });
+            VALUES
+            (
+                ?,
+                ?,
+                ?,
+                ?,
+                ?,
+                datetime('now')
+            )
+            `,
+            [
+                name,
+                email,
+                hashedPassword,
+
+                // Convert face descriptor array
+                // into a string for SQLite
+                JSON.stringify(faceDescriptor),
+
+                browserId
+            ]
+        );
+
+
+        // ==========================================
+        // CREATE JWT TOKEN
+        // ==========================================
+
+        const token = jwt.sign(
+            {
+                id: result.lastID
+            },
+            SECRET,
+            {
+                expiresIn: "7d"
             }
+        );
 
-            const hashedPassword =
-                await bcrypt.hash(
-                    password,
-                    10
-                );
 
-            const result =
-                await run(
-                    `
-                    INSERT INTO users
-                    (
-                        name,
-                        email,
-                        password,
-                        updated_at
-                    )
+        // ==========================================
+        // SET AUTH COOKIE
+        // ==========================================
 
-                    VALUES
-                    (
-                        ?,
-                        ?,
-                        ?,
-                        datetime('now')
-                    )
-                    `,
-                    [
-                        name,
-                        email,
-                        hashedPassword,
-                    ]
-                );
+        setAuthCookies(
+            res,
+            token
+        );
 
-            const token =
-                jwt.sign(
-                    {
-                        id:
-                            result.lastID,
-                    },
-                    SECRET,
-                    {
-                        expiresIn:
-                            "7d",
-                    }
-                );
 
-            setAuthCookies(
-                res,
-                token
-            );
+        // ==========================================
+        // SEND RESPONSE
+        // ==========================================
 
-            res.json({
-                success: true,
-                userId:
-                    result.lastID,
-                message:
-                    "Registered successfully",
+        res.status(201).json({
+            success: true,
+            userId: result.lastID,
+            message: "Registered successfully"
+        });
+
+
+    } catch (error) {
+
+        console.error(
+            "REGISTER ERROR:",
+            error
+        );
+
+
+        // ==========================================
+        // DUPLICATE EMAIL
+        // ==========================================
+
+        if (
+            error.message &&
+            error.message.includes("UNIQUE")
+        ) {
+
+            return res.status(400).json({
+                success: false,
+                message: "User already exists"
             });
 
-        } catch (error) {
-
-            if (
-                error.message.includes(
-                    "UNIQUE"
-                )
-            ) {
-                return res.status(400).json({
-                    message:
-                        "User already exists",
-                });
-            }
-
-            res.status(500).json({
-                message:
-                    "Registration failed",
-                error:
-                    error.message,
-            });
         }
+
+
+        // ==========================================
+        // OTHER ERROR
+        // ==========================================
+
+        res.status(500).json({
+            success: false,
+            message: "Registration failed",
+            error: error.message
+        });
+
     }
-);
+});
 
 /* =========================================================
    LOGIN
@@ -943,6 +1007,7 @@ app.post(
             const {
                 email,
                 password,
+                browserId
             } = req.body;
 
             const user =
@@ -974,6 +1039,20 @@ app.post(
                         "Invalid password",
                 });
             }
+
+            if (browserId) {
+    await run(
+        `
+        UPDATE users
+        SET face_browser_id = ?
+        WHERE id = ?
+        `,
+        [
+            browserId,
+            user.id
+        ]
+    );
+}
 
             const token =
                 jwt.sign(
