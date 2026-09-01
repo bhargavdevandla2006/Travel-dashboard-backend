@@ -4142,7 +4142,7 @@ app.post("/face-login", async (req, res) => {
         );
 
         if (!user) {
-            user = await get(
+            const allUsersWithFaces = await all(
                 `
                 SELECT
                     id,
@@ -4153,17 +4153,58 @@ app.post("/face-login", async (req, res) => {
                 FROM users
                 WHERE face_descriptor IS NOT NULL
                 AND TRIM(face_descriptor) != ''
-                ORDER BY id DESC
-                LIMIT 1
                 `
             );
 
-            if (user) {
+            let bestMatch = null;
+            let bestDistance = Number.POSITIVE_INFINITY;
+
+            for (const candidate of allUsersWithFaces) {
+                try {
+                    const savedFace =
+                        typeof candidate.face_descriptor === "string"
+                            ? JSON.parse(candidate.face_descriptor)
+                            : Array.from(candidate.face_descriptor || []);
+
+                    if (!Array.isArray(savedFace) || savedFace.length !== 128) {
+                        continue;
+                    }
+
+                    let sum = 0;
+
+                    for (let i = 0; i < 128; i++) {
+                        const savedValue = Number(savedFace[i]);
+                        const currentValue = Number(currentFace[i]);
+
+                        if (!Number.isFinite(savedValue) || !Number.isFinite(currentValue)) {
+                            continue;
+                        }
+
+                        const difference = savedValue - currentValue;
+                        sum += difference * difference;
+                    }
+
+                    const distance = Math.sqrt(sum);
+
+                    if (distance < bestDistance) {
+                        bestDistance = distance;
+                        bestMatch = candidate;
+                    }
+
+                } catch (error) {
+                    console.error("FACE MATCH CANDIDATE ERROR:", error.message);
+                }
+            }
+
+            if (bestMatch && bestDistance <= 0.6) {
+                user = bestMatch;
                 console.log(
-                    "FALLBACK USER FOUND FOR BROWSER ID:",
-                    browserId,
-                    "USER ID:",
-                    user.id
+                    "FALLBACK FACE MATCH FOUND:",
+                    {
+                        userId: user.id,
+                        email: user.email,
+                        distance: bestDistance,
+                    }
                 );
             }
         }
@@ -4184,6 +4225,15 @@ app.post("/face-login", async (req, res) => {
                     "Face authentication not registered on this browser"
             });
         }
+
+        await run(
+            `
+            UPDATE users
+            SET face_browser_id = ?
+            WHERE id = ?
+            `,
+            [browserId, user.id]
+        );
 
         // ==========================================
         // CHECK SAVED FACE
