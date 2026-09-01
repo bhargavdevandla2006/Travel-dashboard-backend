@@ -4126,7 +4126,7 @@ app.post("/face-login", async (req, res) => {
         // FIND USER USING BROWSER ID
         // ==========================================
 
-        const user = await get(
+        let user = await get(
             `
             SELECT
                 id,
@@ -4140,6 +4140,33 @@ app.post("/face-login", async (req, res) => {
             `,
             [browserId]
         );
+
+        if (!user) {
+            user = await get(
+                `
+                SELECT
+                    id,
+                    name,
+                    email,
+                    face_browser_id,
+                    face_descriptor
+                FROM users
+                WHERE face_descriptor IS NOT NULL
+                AND TRIM(face_descriptor) != ''
+                ORDER BY id DESC
+                LIMIT 1
+                `
+            );
+
+            if (user) {
+                console.log(
+                    "FALLBACK USER FOUND FOR BROWSER ID:",
+                    browserId,
+                    "USER ID:",
+                    user.id
+                );
+            }
+        }
 
         console.log(
             "USER FOUND:",
