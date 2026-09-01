@@ -13,6 +13,8 @@ const auth = require("./middleware/auth");
 dotenv.config();
 
 const app = express();
+const otpStore = new Map();
+const verifiedPhoneStore = new Map();
 
 /* =========================================================
    CONFIG
@@ -172,6 +174,74 @@ function get(sql, params = []) {
     });
 }
 
+function normalizePhone(phone) {
+    if (!phone) return "";
+
+    const cleaned = String(phone)
+        .replace(/\s+/g, "")
+        .replace(/[()\-]/g, "");
+
+    if (/^\+?[1-9]\d{7,14}$/.test(cleaned)) {
+        return cleaned.startsWith("+") ? cleaned : `+${cleaned}`;
+    }
+
+    return cleaned;
+}
+
+function generateOtp() {
+    return String(Math.floor(100000 + Math.random() * 900000));
+}
+
+async function sendOtpSms(phone, otp) {
+    const normalizedPhone = normalizePhone(phone);
+
+    if (!normalizedPhone) {
+        throw new Error("Invalid phone number");
+    }
+
+    const accountSid = process.env.TWILIO_ACCOUNT_SID;
+    const authToken = process.env.TWILIO_AUTH_TOKEN;
+    const fromNumber = process.env.TWILIO_PHONE_NUMBER;
+
+    if (!accountSid || !authToken || !fromNumber) {
+        console.log(`DEV OTP for ${normalizedPhone}: ${otp}`);
+        return {
+            success: true,
+            devMode: true,
+            otp,
+        };
+    }
+
+    const auth = Buffer.from(`${accountSid}:${authToken}`).toString("base64");
+    const body = new URLSearchParams({
+        To: normalizedPhone,
+        From: fromNumber,
+        Body: `Your TravelHub OTP is ${otp}. Valid for 5 minutes.`,
+    });
+
+    const response = await fetch(
+        `https://api.twilio.com/2010-04-01/Accounts/${accountSid}/Messages.json`,
+        {
+            method: "POST",
+            headers: {
+                Authorization: `Basic ${auth}`,
+                "Content-Type": "application/x-www-form-urlencoded",
+            },
+            body: body.toString(),
+        }
+    );
+
+    if (!response.ok) {
+        const text = await response.text();
+        throw new Error(`OTP send failed: ${text}`);
+    }
+
+    return {
+        success: true,
+        devMode: false,
+    };
+}
+
 
 async function initializeDatabase() {
 
@@ -243,6 +313,10 @@ async function initializeDatabase() {
         ["is_private", "INTEGER DEFAULT 0"],
         ["face_descriptor", "TEXT"],
         ["face_browser_id", "TEXT"],
+        ["phone", "TEXT"],
+        ["otp_code", "TEXT"],
+        ["otp_expires_at", "TEXT"],
+        ["is_phone_verified", "INTEGER DEFAULT 0"],
     ];
 
     for (
@@ -826,6 +900,163 @@ app.post(
 );
 
 /* =========================================================
+   SEND OTP
+========================================================= */
+
+app.post("/send-otp", async (req, res) => {
+    try {
+        const { phone } = req.body;
+        const normalizedPhone = normalizePhone(phone);
+
+        if (!normalizedPhone) {
+            return res.status(400).json({
+                success: false,
+                message: "Valid mobile number is required",
+            });
+        }
+
+        const existingUser = await get(
+            `SELECT id FROM users WHERE phone = ? LIMIT 1`,
+            [normalizedPhone]
+        );
+
+        if (existingUser) {
+            return res.status(400).json({
+                success: false,
+                message: "This mobile number is already registered",
+            });
+        }
+
+        const otp = generateOtp();
+        otpStore.set(normalizedPhone, {
+            code: otp,
+            expiresAt: Date.now() + 5 * 60 * 1000,
+        });
+
+        await sendOtpSms(normalizedPhone, otp);
+
+        return res.json({
+            success: true,
+            message: "OTP sent successfully",
+        });
+    } catch (error) {
+        console.error("SEND OTP ERROR:", error);
+        return res.status(500).json({
+            success: false,
+            message: "Unable to send OTP right now",
+            error: error.message,
+        });
+    }
+});
+
+app.post("/send-login-otp", async (req, res) => {
+    try {
+        const { phone } = req.body;
+        const normalizedPhone = normalizePhone(phone);
+
+        if (!normalizedPhone) {
+            return res.status(400).json({
+                success: false,
+                message: "Valid mobile number is required",
+            });
+        }
+
+        const existingUser = await get(
+            `SELECT id FROM users WHERE phone = ? LIMIT 1`,
+            [normalizedPhone]
+        );
+
+        if (!existingUser) {
+            return res.status(400).json({
+                success: false,
+                message: "This mobile number is not registered",
+            });
+        }
+
+        const otp = generateOtp();
+        otpStore.set(normalizedPhone, {
+            code: otp,
+            expiresAt: Date.now() + 5 * 60 * 1000,
+        });
+
+        await sendOtpSms(normalizedPhone, otp);
+
+        return res.json({
+            success: true,
+            message: "OTP sent successfully",
+        });
+    } catch (error) {
+        console.error("SEND LOGIN OTP ERROR:", error);
+        return res.status(500).json({
+            success: false,
+            message: "Unable to send login OTP",
+            error: error.message,
+        });
+    }
+});
+
+/* =========================================================
+   VERIFY OTP
+========================================================= */
+
+app.post("/verify-otp", async (req, res) => {
+    try {
+        const { phone, otp } = req.body;
+        const normalizedPhone = normalizePhone(phone);
+
+        if (!normalizedPhone || !otp) {
+            return res.status(400).json({
+                success: false,
+                message: "Phone number and OTP are required",
+            });
+        }
+
+        const storedOtp = otpStore.get(normalizedPhone);
+
+        if (!storedOtp) {
+            return res.status(400).json({
+                success: false,
+                message: "OTP expired or not found",
+            });
+        }
+
+        if (Date.now() > storedOtp.expiresAt) {
+            otpStore.delete(normalizedPhone);
+            return res.status(400).json({
+                success: false,
+                message: "OTP expired. Please request a new one.",
+            });
+        }
+
+        if (String(storedOtp.code) !== String(otp)) {
+            return res.status(400).json({
+                success: false,
+                message: "Invalid OTP",
+            });
+        }
+
+        otpStore.delete(normalizedPhone);
+        verifiedPhoneStore.set(normalizedPhone, {
+            verifiedAt: Date.now(),
+            expiresAt: Date.now() + 10 * 60 * 1000,
+        });
+
+        return res.json({
+            success: true,
+            message: "OTP verified successfully",
+            phone: normalizedPhone,
+        });
+    } catch (error) {
+        console.error("VERIFY OTP ERROR:", error);
+        return res.status(500).json({
+            success: false,
+            message: "OTP verification failed",
+            error: error.message,
+        });
+    }
+});
+
+/* =========================================================
    REGISTER
 ========================================================= */
 
@@ -836,14 +1067,9 @@ app.post("/register", async (req, res) => {
             name,
             email,
             password,
-            faceDescriptor,
-            browserId
+            phone,
+            otp,
         } = req.body;
-
-
-        // ==========================================
-        // CHECK REQUIRED FIELDS
-        // ==========================================
 
         if (!name || !email || !password) {
             return res.status(400).json({
@@ -852,39 +1078,57 @@ app.post("/register", async (req, res) => {
             });
         }
 
+        const normalizedPhone = normalizePhone(phone);
 
-        // ==========================================
-        // CHECK FACE REGISTRATION
-        // ==========================================
-
-        if (!faceDescriptor) {
+        if (!normalizedPhone) {
             return res.status(400).json({
                 success: false,
-                message: "Face authentication is required"
+                message: "Valid mobile number is required"
             });
         }
 
-        if (!browserId) {
+        if (!otp) {
             return res.status(400).json({
                 success: false,
-                message: "Browser ID is required"
+                message: "OTP is required to register"
             });
         }
 
+        const verifiedPhone = verifiedPhoneStore.get(normalizedPhone);
 
-        // ==========================================
-        // HASH PASSWORD
-        // ==========================================
+        if (!verifiedPhone || Date.now() > verifiedPhone.expiresAt) {
+            verifiedPhoneStore.delete(normalizedPhone);
+            return res.status(400).json({
+                success: false,
+                message: "Please verify your mobile number first"
+            });
+        }
 
-        const hashedPassword = await bcrypt.hash(
-            password,
-            10
+        const existingEmail = await get(
+            `SELECT id FROM users WHERE email = ? LIMIT 1`,
+            [email]
         );
 
+        if (existingEmail) {
+            return res.status(400).json({
+                success: false,
+                message: "User already exists with this email"
+            });
+        }
 
-        // ==========================================
-        // SAVE USER
-        // ==========================================
+        const existingPhone = await get(
+            `SELECT id FROM users WHERE phone = ? LIMIT 1`,
+            [normalizedPhone]
+        );
+
+        if (existingPhone) {
+            return res.status(400).json({
+                success: false,
+                message: "This mobile number is already registered"
+            });
+        }
+
+        const hashedPassword = await bcrypt.hash(password, 10);
 
         const result = await run(
             `
@@ -893,106 +1137,45 @@ app.post("/register", async (req, res) => {
                 name,
                 email,
                 password,
-                face_descriptor,
-                face_browser_id,
+                phone,
+                is_phone_verified,
                 updated_at
             )
-
-            VALUES
-            (
-                ?,
-                ?,
-                ?,
-                ?,
-                ?,
-                datetime('now')
-            )
+            VALUES (?, ?, ?, ?, 1, datetime('now'))
             `,
             [
                 name,
                 email,
                 hashedPassword,
-
-                // Convert face descriptor array
-                // into a string for SQLite
-                JSON.stringify(faceDescriptor),
-
-                browserId
+                normalizedPhone,
             ]
         );
 
+        verifiedPhoneStore.delete(normalizedPhone);
 
-        // ==========================================
-        // CREATE JWT TOKEN
-        // ==========================================
+        const token = jwt.sign({ id: result.lastID }, SECRET, { expiresIn: "7d" });
+        setAuthCookies(res, token);
 
-        const token = jwt.sign(
-            {
-                id: result.lastID
-            },
-            SECRET,
-            {
-                expiresIn: "7d"
-            }
-        );
-
-
-        // ==========================================
-        // SET AUTH COOKIE
-        // ==========================================
-
-        setAuthCookies(
-            res,
-            token
-        );
-
-
-        // ==========================================
-        // SEND RESPONSE
-        // ==========================================
-
-        res.status(201).json({
+        return res.status(201).json({
             success: true,
             userId: result.lastID,
             message: "Registered successfully"
         });
-
-
     } catch (error) {
+        console.error("REGISTER ERROR:", error);
 
-        console.error(
-            "REGISTER ERROR:",
-            error
-        );
-
-
-        // ==========================================
-        // DUPLICATE EMAIL
-        // ==========================================
-
-        if (
-            error.message &&
-            error.message.includes("UNIQUE")
-        ) {
-
+        if (error.message && error.message.includes("UNIQUE")) {
             return res.status(400).json({
                 success: false,
                 message: "User already exists"
             });
-
         }
 
-
-        // ==========================================
-        // OTHER ERROR
-        // ==========================================
-
-        res.status(500).json({
+        return res.status(500).json({
             success: false,
             message: "Registration failed",
             error: error.message
         });
-
     }
 });
 
@@ -1007,8 +1190,61 @@ app.post(
 
             const {
                 email,
-                password
+                password,
+                phone,
+                otp,
             } = req.body;
+
+            if (phone && otp) {
+                const normalizedPhone = normalizePhone(phone);
+                const storedOtp = otpStore.get(normalizedPhone);
+
+                if (!storedOtp || Date.now() > storedOtp.expiresAt) {
+                    otpStore.delete(normalizedPhone);
+                    return res.status(400).json({
+                        success: false,
+                        message: "OTP expired or invalid"
+                    });
+                }
+
+                if (String(storedOtp.code) !== String(otp)) {
+                    return res.status(400).json({
+                        success: false,
+                        message: "Invalid OTP"
+                    });
+                }
+
+                const user = await get(
+                    `SELECT * FROM users WHERE phone = ? LIMIT 1`,
+                    [normalizedPhone]
+                );
+
+                if (!user) {
+                    otpStore.delete(normalizedPhone);
+                    return res.status(400).json({
+                        success: false,
+                        message: "This mobile number is not registered"
+                    });
+                }
+
+                otpStore.delete(normalizedPhone);
+
+                const token = jwt.sign({ id: user.id }, SECRET, { expiresIn: "7d" });
+                setAuthCookies(res, token);
+
+                return res.json({
+                    success: true,
+                    userId: user.id,
+                    message: "Login successfully"
+                });
+            }
+
+            if (!email || !password) {
+                return res.status(400).json({
+                    success: false,
+                    message: "Email and password are required"
+                });
+            }
 
             const user = await get(
                 `
@@ -1025,10 +1261,7 @@ app.post(
                 });
             }
 
-            const valid = await bcrypt.compare(
-                password,
-                user.password
-            );
+            const valid = await bcrypt.compare(password, user.password);
 
             if (!valid) {
                 return res.status(400).json({
@@ -1036,20 +1269,8 @@ app.post(
                 });
             }
 
-            const token = jwt.sign(
-                {
-                    id: user.id,
-                },
-                SECRET,
-                {
-                    expiresIn: "7d",
-                }
-            );
-
-            setAuthCookies(
-                res,
-                token
-            );
+            const token = jwt.sign({ id: user.id }, SECRET, { expiresIn: "7d" });
+            setAuthCookies(res, token);
 
             res.json({
                 success: true,
@@ -1058,12 +1279,7 @@ app.post(
             });
 
         } catch (error) {
-
-            console.error(
-                "LOGIN ERROR:",
-                error
-            );
-
+            console.error("LOGIN ERROR:", error);
             res.status(500).json({
                 message: "Login failed",
                 error: error.message,
