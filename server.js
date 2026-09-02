@@ -175,17 +175,30 @@ function get(sql, params = []) {
 }
 
 function normalizePhone(phone) {
-    if (!phone) return "";
+    if (phone === null || phone === undefined) return "";
 
     const cleaned = String(phone)
+        .trim()
         .replace(/\s+/g, "")
         .replace(/[()\-]/g, "");
 
-    if (/^\+?[1-9]\d{7,14}$/.test(cleaned)) {
-        return cleaned.startsWith("+") ? cleaned : `+${cleaned}`;
+    if (!cleaned) return "";
+
+    let normalized = cleaned.replace(/[^\d+]/g, "");
+
+    if (normalized.startsWith("00")) {
+        normalized = `+${normalized.slice(2)}`;
     }
 
-    return cleaned;
+    if (!normalized.startsWith("+")) {
+        normalized = `+${normalized}`;
+    }
+
+    if (!/^\+\d{8,15}$/.test(normalized)) {
+        return "";
+    }
+
+    return normalized;
 }
 
 function generateOtp() {
@@ -199,17 +212,24 @@ async function sendOtpSms(phone, otp) {
         throw new Error("Invalid phone number");
     }
 
-    const accountSid = process.env.TWILIO_ACCOUNT_SID;
-    const authToken = process.env.TWILIO_AUTH_TOKEN;
-    const fromNumber = process.env.TWILIO_PHONE_NUMBER;
+    const accountSid = process.env.TWILIO_ACCOUNT_SID?.trim();
+    const authToken = process.env.TWILIO_AUTH_TOKEN?.trim();
+    const fromNumber = process.env.TWILIO_PHONE_NUMBER?.trim();
+    const allowDevOtp = process.env.ALLOW_DEV_OTP === "true";
 
     if (!accountSid || !authToken || !fromNumber) {
-        console.log(`DEV OTP for ${normalizedPhone}: ${otp}`);
-        return {
-            success: true,
-            devMode: true,
-            otp,
-        };
+        if (allowDevOtp) {
+            console.log(`DEV OTP for ${normalizedPhone}: ${otp}`);
+            return {
+                success: true,
+                devMode: true,
+                otp,
+            };
+        }
+
+        throw new Error(
+            "Twilio SMS is not configured. Set TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, and TWILIO_PHONE_NUMBER in the server .env file."
+        );
     }
 
     const auth = Buffer.from(`${accountSid}:${authToken}`).toString("base64");
@@ -233,6 +253,17 @@ async function sendOtpSms(phone, otp) {
 
     if (!response.ok) {
         const text = await response.text();
+
+        if (
+            text.includes("verified recipient") ||
+            text.includes("trial") ||
+            text.includes("template")
+        ) {
+            throw new Error(
+                "Twilio trial account issue: add the phone number to Twilio Verified Caller IDs and use a Twilio trial-approved number. SMS will not work for unverified numbers."
+            );
+        }
+
         throw new Error(`OTP send failed: ${text}`);
     }
 
@@ -948,6 +979,105 @@ app.post("/send-otp", async (req, res) => {
         });
     }
 });
+
+function normalizePhone(phone) {
+    if (phone === null || phone === undefined) return "";
+
+    const cleaned = String(phone)
+        .trim()
+        .replace(/\s+/g, "")
+        .replace(/[()\-]/g, "");
+
+    if (!cleaned) return "";
+
+    let normalized = cleaned.replace(/[^\d+]/g, "");
+
+    if (normalized.startsWith("00")) {
+        normalized = `+${normalized.slice(2)}`;
+    }
+
+    if (!normalized.startsWith("+")) {
+        normalized = `+${normalized}`;
+    }
+
+    if (!/^\+\d{8,15}$/.test(normalized)) {
+        return "";
+    }
+
+    return normalized;
+}
+
+function generateOtp() {
+    return String(Math.floor(100000 + Math.random() * 900000));
+}
+
+async function sendOtpSms(phone, otp) {
+    const normalizedPhone = normalizePhone(phone);
+
+    if (!normalizedPhone) {
+        throw new Error("Invalid phone number");
+    }
+
+    const accountSid = process.env.TWILIO_ACCOUNT_SID?.trim();
+    const authToken = process.env.TWILIO_AUTH_TOKEN?.trim();
+    const fromNumber = process.env.TWILIO_PHONE_NUMBER?.trim();
+    const allowDevOtp = process.env.ALLOW_DEV_OTP === "true";
+
+    if (!accountSid || !authToken || !fromNumber) {
+        if (allowDevOtp) {
+            console.log(`DEV OTP for ${normalizedPhone}: ${otp}`);
+            return {
+                success: true,
+                devMode: true,
+                otp,
+            };
+        }
+
+        throw new Error(
+            "Twilio SMS is not configured. Set TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, and TWILIO_PHONE_NUMBER in the server .env file."
+        );
+    }
+
+    const auth = Buffer.from(`${accountSid}:${authToken}`).toString("base64");
+    const body = new URLSearchParams({
+        To: normalizedPhone,
+        From: fromNumber,
+        Body: `Your TravelHub OTP is ${otp}. Valid for 5 minutes.`,
+    });
+
+    const response = await fetch(
+        `https://api.twilio.com/2010-04-01/Accounts/${accountSid}/Messages.json`,
+        {
+            method: "POST",
+            headers: {
+                Authorization: `Basic ${auth}`,
+                "Content-Type": "application/x-www-form-urlencoded",
+            },
+            body: body.toString(),
+        }
+    );
+
+    if (!response.ok) {
+        const text = await response.text();
+
+        if (
+            text.includes("verified recipient") ||
+            text.includes("trial") ||
+            text.includes("template")
+        ) {
+            throw new Error(
+                "Twilio trial account issue: add the phone number to Twilio Verified Caller IDs and use a Twilio-approved SMS number."
+            );
+        }
+
+        throw new Error(`OTP send failed: ${text}`);
+    }
+
+    return {
+        success: true,
+        devMode: false,
+    };
+}
 
 app.post("/send-login-otp", async (req, res) => {
     try {
