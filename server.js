@@ -186,7 +186,9 @@ function normalizePhone(phone) {
 
     let normalized = cleaned.replace(/[^\d+]/g, "");
 
-    if (normalized.startsWith("00")) {
+    if (/^\d{10}$/.test(normalized)) {
+        normalized = `+91${normalized}`;
+    } else if (normalized.startsWith("00")) {
         normalized = `+${normalized.slice(2)}`;
     }
 
@@ -260,7 +262,7 @@ async function sendOtpSms(phone, otp) {
             text.includes("template")
         ) {
             throw new Error(
-                "Twilio trial account issue: add the phone number to Twilio Verified Caller IDs and use a Twilio trial-approved number. SMS will not work for unverified numbers."
+                "Twilio trial account: verify this recipient in Twilio Console under Verified Caller IDs, or upgrade the account before sending SMS."
             );
         }
 
@@ -974,8 +976,7 @@ app.post("/send-otp", async (req, res) => {
         console.error("SEND OTP ERROR:", error);
         return res.status(500).json({
             success: false,
-            message: "Unable to send OTP right now",
-            error: error.message,
+            message: error.message || "Unable to send OTP right now",
         });
     }
 });
@@ -992,7 +993,9 @@ function normalizePhone(phone) {
 
     let normalized = cleaned.replace(/[^\d+]/g, "");
 
-    if (normalized.startsWith("00")) {
+    if (/^\d{10}$/.test(normalized)) {
+        normalized = `+91${normalized}`;
+    } else if (normalized.startsWith("00")) {
         normalized = `+${normalized.slice(2)}`;
     }
 
@@ -1066,7 +1069,7 @@ async function sendOtpSms(phone, otp) {
             text.includes("template")
         ) {
             throw new Error(
-                "Twilio trial account issue: add the phone number to Twilio Verified Caller IDs and use a Twilio-approved SMS number."
+                "Twilio trial account: verify this recipient in Twilio Console under Verified Caller IDs, or upgrade the account before sending SMS."
             );
         }
 
@@ -1119,8 +1122,7 @@ app.post("/send-login-otp", async (req, res) => {
         console.error("SEND LOGIN OTP ERROR:", error);
         return res.status(500).json({
             success: false,
-            message: "Unable to send login OTP",
-            error: error.message,
+            message: error.message || "Unable to send login OTP",
         });
     }
 });
