@@ -16,9 +16,7 @@ const app = express();
 const otpStore = new Map();
 const verifiedPhoneStore = new Map();
 
-/* =========================================================
-   CONFIG
-========================================================= */
+
 
 const PORT = process.env.PORT || 3000;
 
@@ -39,9 +37,7 @@ const allowedOrigins = [
 
 
 
-/* =========================================================
-   MIDDLEWARE
-========================================================= */
+
 
 app.use(
     cors({
@@ -69,9 +65,7 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser());
 
-/* =========================================================
-   DATABASE
-========================================================= */
+
 
 const dbPath = path.join(__dirname, "travel.db");
 
@@ -119,9 +113,7 @@ if (
     );
 }
 
-/* =========================================================
-   DATABASE HELPERS
-========================================================= */
+
 
 function run(sql, params = []) {
     return new Promise((resolve, reject) => {
@@ -382,9 +374,7 @@ async function initializeDatabase() {
         WHERE updated_at IS NULL
     `);
 
-    /* =====================================================
-       TRIPS
-    ===================================================== */
+    
 
     await run(`
         CREATE TABLE IF NOT EXISTS trips (
@@ -425,9 +415,7 @@ async function initializeDatabase() {
 
         console.log("✅ Added notifications.is_read");
     }
-    /* =====================================================
-       DESTINATIONS
-    ===================================================== */
+    
 
     await run(`
         CREATE TABLE IF NOT EXISTS destinations (
@@ -438,9 +426,7 @@ async function initializeDatabase() {
         )
     `);
 
-    /* =====================================================
-       FOLLOWERS
-    ===================================================== */
+    
 
     await run(`
         CREATE TABLE IF NOT EXISTS followers (
@@ -456,9 +442,7 @@ async function initializeDatabase() {
         )
     `);
 
-    /* =====================================================
-       FOLLOW REQUESTS
-    ===================================================== */
+    
 
     await run(`
         CREATE TABLE IF NOT EXISTS follow_requests (
@@ -480,9 +464,7 @@ async function initializeDatabase() {
         )
     `);
 
-    /* =====================================================
-       CLOSE FRIENDS
-    ===================================================== */
+    
 
     await run(`
         CREATE TABLE IF NOT EXISTS close_friends (
@@ -516,9 +498,7 @@ async function initializeDatabase() {
     )
 `);
 
-    /* =====================================================
-       BLOCKED USERS
-    ===================================================== */
+    
 
     await run(`
         CREATE TABLE IF NOT EXISTS blocked_users (
@@ -538,9 +518,7 @@ async function initializeDatabase() {
         )
     `);
 
-    /* =====================================================
-       CONTENT PREFERENCES
-    ===================================================== */
+    
 
     await run(`
         CREATE TABLE IF NOT EXISTS content_preferences (
@@ -561,9 +539,7 @@ async function initializeDatabase() {
         )
     `);
 
-    /* =====================================================
-       TRIP LIKES
-    ===================================================== */
+    
 
     await run(`
         CREATE TABLE IF NOT EXISTS likes (
@@ -580,9 +556,7 @@ async function initializeDatabase() {
         )
     `);
 
-    /* =====================================================
-       COMMENTS
-    ===================================================== */
+    
 
     await run(`
         CREATE TABLE IF NOT EXISTS comments (
@@ -599,9 +573,7 @@ async function initializeDatabase() {
         )
     `);
 
-    /* =====================================================
-       REELS
-    ===================================================== */
+    
 
     await run(`
         CREATE TABLE IF NOT EXISTS reels (
@@ -646,9 +618,7 @@ async function initializeDatabase() {
         `);
     }
 
-    /* =====================================================
-       SAVED REELS
-    ===================================================== */
+    
 
     await run(`
         CREATE TABLE IF NOT EXISTS saved_reels (
@@ -668,9 +638,7 @@ async function initializeDatabase() {
         )
     `);
 
-    /* =====================================================
-       REEL LIKES
-    ===================================================== */
+    
 
     await run(`
     CREATE TABLE IF NOT EXISTS reel_likes (
@@ -716,9 +684,7 @@ async function initializeDatabase() {
         );
     }
 
-    /* =====================================================
-       HIGHLIGHTS
-    ===================================================== */
+    
 
     await run(`
         CREATE TABLE IF NOT EXISTS highlights (
@@ -735,9 +701,7 @@ async function initializeDatabase() {
         )
     `);
 
-    /* =====================================================
-       HIGHLIGHT REELS
-    ===================================================== */
+    
 
     await run(`
         CREATE TABLE IF NOT EXISTS highlight_reels (
@@ -754,9 +718,7 @@ async function initializeDatabase() {
         )
     `);
 
-    /* =====================================================
-       DEFAULT DESTINATIONS
-    ===================================================== */
+    
 
     await run(`
         INSERT OR IGNORE INTO destinations
@@ -803,9 +765,7 @@ async function initializeDatabase() {
     console.log("✅ Database initialization complete");
 }
 
-/* =========================================================
-   HOME
-========================================================= */
+
 
 app.get("/", (req, res) => {
     res.json({
@@ -815,9 +775,7 @@ app.get("/", (req, res) => {
     });
 });
 
-/* =========================================================
-   DESTINATIONS
-========================================================= */
+
 
 app.get(
     "/destinations",
@@ -873,9 +831,7 @@ app.get(
     }
 );
 
-/* =========================================================
-   RAZORPAY
-========================================================= */
+
 
 app.post(
     "/create-order",
@@ -932,9 +888,7 @@ app.post(
     }
 );
 
-/* =========================================================
-   SEND OTP
-========================================================= */
+
 
 app.post("/send-otp", async (req, res) => {
     try {
@@ -1127,9 +1081,7 @@ app.post("/send-login-otp", async (req, res) => {
     }
 });
 
-/* =========================================================
-   VERIFY OTP
-========================================================= */
+
 
 app.post("/verify-otp", async (req, res) => {
     try {
@@ -1188,9 +1140,7 @@ app.post("/verify-otp", async (req, res) => {
     }
 });
 
-/* =========================================================
-   REGISTER
-========================================================= */
+
 
 app.post("/register", async (req, res) => {
     try {
@@ -1199,8 +1149,8 @@ app.post("/register", async (req, res) => {
             name,
             email,
             password,
-            phone,
-            otp,
+            faceDescriptor,
+            browserId,
         } = req.body;
 
         if (!name || !email || !password) {
@@ -1210,29 +1160,24 @@ app.post("/register", async (req, res) => {
             });
         }
 
-        const normalizedPhone = normalizePhone(phone);
-
-        if (!normalizedPhone) {
+        if (!browserId) {
             return res.status(400).json({
                 success: false,
-                message: "Valid mobile number is required"
+                message: "Browser identity is required for face authentication"
             });
         }
 
-        if (!otp) {
+        if (!Array.isArray(faceDescriptor) || faceDescriptor.length !== 128) {
             return res.status(400).json({
                 success: false,
-                message: "OTP is required to register"
+                message: "Face verification is required to register"
             });
         }
 
-        const verifiedPhone = verifiedPhoneStore.get(normalizedPhone);
-
-        if (!verifiedPhone || Date.now() > verifiedPhone.expiresAt) {
-            verifiedPhoneStore.delete(normalizedPhone);
+        if (faceDescriptor.some((value) => typeof value !== "number" || !Number.isFinite(value))) {
             return res.status(400).json({
                 success: false,
-                message: "Please verify your mobile number first"
+                message: "Invalid face verification data"
             });
         }
 
@@ -1248,18 +1193,6 @@ app.post("/register", async (req, res) => {
             });
         }
 
-        const existingPhone = await get(
-            `SELECT id FROM users WHERE phone = ? LIMIT 1`,
-            [normalizedPhone]
-        );
-
-        if (existingPhone) {
-            return res.status(400).json({
-                success: false,
-                message: "This mobile number is already registered"
-            });
-        }
-
         const hashedPassword = await bcrypt.hash(password, 10);
 
         const result = await run(
@@ -1270,20 +1203,20 @@ app.post("/register", async (req, res) => {
                 email,
                 password,
                 phone,
-                is_phone_verified,
+                face_descriptor,
+                face_browser_id,
                 updated_at
             )
-            VALUES (?, ?, ?, ?, 1, datetime('now'))
+            VALUES (?, ?, ?, NULL, ?, ?, datetime('now'))
             `,
             [
                 name,
                 email,
                 hashedPassword,
-                normalizedPhone,
+                JSON.stringify(faceDescriptor),
+                browserId,
             ]
         );
-
-        verifiedPhoneStore.delete(normalizedPhone);
 
         const token = jwt.sign({ id: result.lastID }, SECRET, { expiresIn: "7d" });
         setAuthCookies(res, token);
@@ -1311,9 +1244,7 @@ app.post("/register", async (req, res) => {
     }
 });
 
-/* =========================================================
-   LOGIN
-========================================================= */
+
 
 app.post(
     "/login",
@@ -1420,9 +1351,7 @@ app.post(
     }
 );
 
-/* =========================================================
-   COOKIE HELPER
-========================================================= */
+
 
 function setAuthCookies(
     res,
@@ -1477,9 +1406,7 @@ function setAuthCookies(
     }
 }
 
-/* =========================================================
-   CURRENT PROFILE
-========================================================= */
+
 
 app.get(
     "/profile",
@@ -1534,9 +1461,7 @@ app.get(
     }
 );
 
-/* =========================================================
-   SINGLE USER
-========================================================= */
+
 
 app.get(
     "/users/:id",
@@ -1589,9 +1514,7 @@ app.get(
     }
 );
 
-/* =========================================================
-   ALL USERS
-========================================================= */
+
 
 app.get(
     "/users",
@@ -1629,9 +1552,7 @@ app.get(
     }
 );
 
-/* =========================================================
-   SEARCH USERS
-========================================================= */
+
 
 app.get(
     "/search-users",
@@ -1675,9 +1596,7 @@ app.get(
     }
 );
 
-/* =========================================================
-   UPDATE PROFILE
-========================================================= */
+
 
 app.put(
     "/profile",
@@ -1769,9 +1688,7 @@ app.put(
     }
 );
 
-/* =========================================================
-   LOGOUT
-========================================================= */
+
 
 app.post(
     "/logout",
@@ -1806,9 +1723,7 @@ app.post(
     }
 );
 
-/* =========================================================
-   CREATE TRIP
-========================================================= */
+
 
 app.post(
     "/trips",
@@ -1876,9 +1791,7 @@ app.post(
     }
 );
 
-/* =========================================================
-   ALL TRIPS
-========================================================= */
+
 
 app.get(
     "/trips",
@@ -1903,9 +1816,7 @@ app.get(
     }
 );
 
-/* =========================================================
-   USER TRIPS
-========================================================= */
+
 
 app.get(
     "/users/:id/trips",
@@ -1936,9 +1847,7 @@ app.get(
     }
 );
 
-/* =========================================================
-   FOLLOW USER
-========================================================= */
+
 
 app.post(
     "/follow/:id",
@@ -2072,9 +1981,7 @@ app.post(
     }
 );
 
-/* =========================================================
-   FOLLOW REQUESTS
-========================================================= */
+
 
 app.get(
     "/follow-requests",
@@ -2127,9 +2034,7 @@ app.get(
     }
 );
 
-/* =========================================================
-   ACCEPT FOLLOW REQUEST
-========================================================= */
+
 
 app.post(
     "/follow-requests/:id/accept",
@@ -2203,9 +2108,7 @@ app.post(
     }
 );
 
-/* =========================================================
-   REJECT FOLLOW REQUEST
-========================================================= */
+
 
 app.post(
     "/follow-requests/:id/reject",
@@ -2244,9 +2147,7 @@ app.post(
     }
 );
 
-/* =========================================================
-   UNFOLLOW
-========================================================= */
+
 
 app.delete(
     "/unfollow/:id",
@@ -2283,9 +2184,7 @@ app.delete(
     }
 );
 
-/* =========================================================
-   FOLLOW STATUS
-========================================================= */
+
 
 app.get(
     "/follow-status/:id",
@@ -2346,9 +2245,7 @@ app.get(
     }
 );
 
-/* =========================================================
-   FOLLOWERS COUNT
-========================================================= */
+
 
 app.get(
     "/followers-count/:id",
@@ -2379,9 +2276,7 @@ app.get(
     }
 );
 
-/* =========================================================
-   FOLLOWING COUNT
-========================================================= */
+
 
 app.get(
     "/following-count/:id",
@@ -2455,9 +2350,7 @@ app.get(
 
 
 
-/* =========================================================
-   CLOSE FRIENDS
-========================================================= */
+
 
 app.post(
     "/close-friends/:id",
@@ -2502,9 +2395,7 @@ app.post(
     }
 );
 
-/* =========================================================
-   SEND MESSAGE
-========================================================= */
+
 
 app.post(
     "/messages/:id",
@@ -2565,9 +2456,7 @@ app.post(
     }
 );
 
-/* =========================================================
-   GET CONVERSATION
-========================================================= */
+
 
 app.get(
     "/messages/:id",
@@ -2697,9 +2586,7 @@ app.get(
     }
 );
 
-/* =========================================================
-   BLOCK USER
-========================================================= */
+
 
 app.post(
     "/block/:id",
@@ -2849,9 +2736,7 @@ app.get(
     }
 );
 
-/* =========================================================
-   CONTENT PREFERENCES
-========================================================= */
+
 
 app.get(
     "/content-preferences",
@@ -2978,9 +2863,7 @@ app.put(
     }
 );
 
-/* =========================================================
-   CREATE REEL
-========================================================= */
+
 
 app.post(
     "/reels",
@@ -3061,9 +2944,7 @@ app.post(
     }
 );
 
-/* =========================================================
-   GET ALL REELS
-========================================================= */
+
 
 app.get(
     "/reels",
@@ -3226,9 +3107,7 @@ app.get(
     }
 );
 
-/* =========================================================
-   GET USER REELS
-========================================================= */
+
 
 app.get(
     "/users/:id/reels",
@@ -3324,9 +3203,7 @@ app.get(
     }
 );
 
-/* =========================================================
-   DELETE REEL
-========================================================= */
+
 
 app.delete(
     "/reels/:id",
@@ -3393,9 +3270,7 @@ app.delete(
     }
 );
 
-/* =========================================================
-   LIKE REEL
-========================================================= */
+
 
 app.post(
     "/reels/:id/like",
@@ -3434,9 +3309,7 @@ app.post(
     }
 );
 
-/* =========================================================
-   UNLIKE REEL
-========================================================= */
+
 
 app.delete(
     "/reels/:id/like",
@@ -3473,9 +3346,7 @@ app.delete(
     }
 );
 
-/* =========================================================
-   SAVE REEL
-========================================================= */
+
 
 app.post(
     "/reels/:id/save",
@@ -3514,9 +3385,7 @@ app.post(
     }
 );
 
-/* =========================================================
-   UNSAVE REEL
-========================================================= */
+
 
 app.delete(
     "/reels/:id/save",
@@ -3553,9 +3422,7 @@ app.delete(
     }
 );
 
-/* =========================================================
-   GET SAVED REELS
-========================================================= */
+
 
 app.get(
     "/saved-reels",
@@ -3609,9 +3476,7 @@ app.get(
     }
 );
 
-/* =========================================================
-   GET LIKED REELS
-========================================================= */
+
 
 app.get(
     "/liked-reels",
@@ -3665,9 +3530,7 @@ app.get(
     }
 );
 
-/* =========================================================
-   CREATE HIGHLIGHT
-========================================================= */
+
 
 app.post(
     "/highlights",
@@ -3723,9 +3586,7 @@ app.post(
     }
 );
 
-/* =========================================================
-   GET USER HIGHLIGHTS
-========================================================= */
+
 
 app.get(
     "/users/:id/highlights",
@@ -3759,9 +3620,7 @@ app.get(
     }
 );
 
-/* =========================================================
-   EDIT HIGHLIGHT
-========================================================= */
+
 
 app.put(
     "/highlights/:id",
@@ -3811,9 +3670,7 @@ app.put(
     }
 );
 
-/* =========================================================
-   DELETE HIGHLIGHT
-========================================================= */
+
 
 app.delete(
     "/highlights/:id",
@@ -3859,9 +3716,7 @@ app.delete(
     }
 );
 
-/* =========================================================
-   ADD REEL TO HIGHLIGHT
-========================================================= */
+
 
 app.post(
     "/highlights/:id/reels/:reelId",
@@ -3924,9 +3779,7 @@ app.post(
     }
 );
 
-/* =========================================================
-   REMOVE REEL FROM HIGHLIGHT
-========================================================= */
+
 
 app.delete(
     "/highlights/:id/reels/:reelId",
@@ -3963,9 +3816,7 @@ app.delete(
     }
 );
 
-/* =========================================================
-   GET HIGHLIGHT REELS
-========================================================= */
+
 
 app.get(
     "/highlights/:id/reels",
@@ -4006,17 +3857,13 @@ app.get(
     }
 );
 
-/* =========================================================
-   TRIP LIKE / UNLIKE TOGGLE
-========================================================= */
+
 
 app.post("/like/:id", auth, async (req, res) => {
     try {
 
         const userId = req.user.id;
         const tripId = req.params.id;
-
-        // Check whether user already liked this trip
         const existingLike = await get(
             `
             SELECT id
@@ -4026,10 +3873,6 @@ app.post("/like/:id", auth, async (req, res) => {
             `,
             [userId, tripId]
         );
-
-        // ================================================
-        // ALREADY LIKED → UNLIKE
-        // ================================================
 
         if (existingLike) {
 
@@ -4041,8 +3884,6 @@ app.post("/like/:id", auth, async (req, res) => {
                 `,
                 [userId, tripId]
             );
-
-            // Get updated count
             const count = await get(
                 `
                 SELECT COUNT(*) AS count
@@ -4059,10 +3900,6 @@ app.post("/like/:id", auth, async (req, res) => {
             });
         }
 
-        // ================================================
-        // NOT LIKED → LIKE
-        // ================================================
-
         await run(
             `
             INSERT INTO likes
@@ -4074,8 +3911,6 @@ app.post("/like/:id", auth, async (req, res) => {
             `,
             [userId, tripId]
         );
-
-        // Get trip owner
         const trip = await get(
             `
             SELECT user_id, title
@@ -4084,8 +3919,6 @@ app.post("/like/:id", auth, async (req, res) => {
             `,
             [tripId]
         );
-
-        // Create notification
         if (
             trip &&
             Number(trip.user_id) !== Number(userId)
@@ -4110,8 +3943,6 @@ app.post("/like/:id", auth, async (req, res) => {
                 ]
             );
         }
-
-        // Get updated count
         const count = await get(
             `
             SELECT COUNT(*) AS count
@@ -4139,9 +3970,7 @@ app.post("/like/:id", auth, async (req, res) => {
 });
 
 
-/* =========================================================
-   CHECK LIKE
-========================================================= */
+
 
 app.get("/check-like/:id", auth, async (req, res) => {
 
@@ -4175,9 +4004,7 @@ app.get("/check-like/:id", auth, async (req, res) => {
 });
 
 
-/* =========================================================
-   LIKES COUNT
-========================================================= */
+
 
 app.get("/likes-count/:id", async (req, res) => {
 
@@ -4205,9 +4032,7 @@ app.get("/likes-count/:id", async (req, res) => {
         });
     }
 });
-/* =========================================================
-   ADD COMMENT
-========================================================= */
+
 
 app.post(
     "/comments/:tripId",
@@ -4265,9 +4090,7 @@ app.post(
     }
 );
 
-/* =========================================================
-   GET COMMENTS
-========================================================= */
+
 
 app.get(
     "/comments/:tripId",
@@ -4319,25 +4142,15 @@ app.get(
     }
 );
 
-/* =========================================================
-   FACE LOGIN
-========================================================= */
 
-/* =========================================================
-   FACE LOGIN
-========================================================= */
 
-/* =========================================================
-   FACE LOGIN
-========================================================= */
 
-/* =========================================================
-   FACE LOGIN
-========================================================= */
 
-/* =========================================================
-   FACE LOGIN
-========================================================= */
+
+
+
+
+
 
 app.post("/face-login", async (req, res) => {
     try {
@@ -4345,10 +4158,6 @@ app.post("/face-login", async (req, res) => {
         console.log("=================================");
         console.log("FACE LOGIN REQUEST");
         console.log("=================================");
-
-        // ==========================================
-        // CHECK REQUEST BODY
-        // ==========================================
 
         console.log("Request body:", req.body);
         console.log(
@@ -4367,12 +4176,11 @@ app.post("/face-login", async (req, res) => {
             });
         }
 
-        // ==========================================
-        // GET DATA FROM REQUEST
-        // ==========================================
-
         const browserId =
             req.body.browserId;
+
+        const email =
+            req.body.email;
 
         const faceDescriptor =
             req.body.faceDescriptor;
@@ -4392,10 +4200,6 @@ app.post("/face-login", async (req, res) => {
             typeof faceDescriptor
         );
 
-        // ==========================================
-        // CHECK BROWSER ID
-        // ==========================================
-
         if (!browserId) {
             return res.status(400).json({
                 success: false,
@@ -4404,9 +4208,12 @@ app.post("/face-login", async (req, res) => {
             });
         }
 
-        // ==========================================
-        // CHECK FACE DESCRIPTOR
-        // ==========================================
+        if (!email || typeof email !== "string") {
+            return res.status(400).json({
+                success: false,
+                message: "Registered email is required for face login"
+            });
+        }
 
         if (!faceDescriptor) {
             return res.status(400).json({
@@ -4415,10 +4222,6 @@ app.post("/face-login", async (req, res) => {
                     "Face descriptor is required"
             });
         }
-
-        // ==========================================
-        // CONVERT CURRENT FACE
-        // ==========================================
 
         let currentFace;
 
@@ -4441,10 +4244,6 @@ app.post("/face-login", async (req, res) => {
             });
         }
 
-        // ==========================================
-        // CHECK CURRENT FACE
-        // ==========================================
-
         if (!Array.isArray(currentFace)) {
             return res.status(400).json({
                 success: false,
@@ -4458,10 +4257,6 @@ app.post("/face-login", async (req, res) => {
             currentFace.length
         );
 
-        // ==========================================
-        // FACE DESCRIPTOR MUST HAVE 128 VALUES
-        // ==========================================
-
         if (currentFace.length !== 128) {
             return res.status(400).json({
                 success: false,
@@ -4469,123 +4264,30 @@ app.post("/face-login", async (req, res) => {
                     "Face descriptor must contain 128 values"
             });
         }
-
-        // ==========================================
-        // FIND USER USING BROWSER ID
-        // ==========================================
-
-        let user = await get(
+        const user = await get(
             `
-            SELECT
-                id,
-                name,
-                email,
-                face_browser_id,
-                face_descriptor
+            SELECT id, name, email, face_browser_id, face_descriptor
             FROM users
-            WHERE face_browser_id = ?
+            WHERE email = ?
             LIMIT 1
             `,
-            [browserId]
+            [email.trim()]
         );
-
-        if (!user) {
-            const allUsersWithFaces = await all(
-                `
-                SELECT
-                    id,
-                    name,
-                    email,
-                    face_browser_id,
-                    face_descriptor
-                FROM users
-                WHERE face_descriptor IS NOT NULL
-                AND TRIM(face_descriptor) != ''
-                `
-            );
-
-            let bestMatch = null;
-            let bestDistance = Number.POSITIVE_INFINITY;
-
-            for (const candidate of allUsersWithFaces) {
-                try {
-                    const savedFace =
-                        typeof candidate.face_descriptor === "string"
-                            ? JSON.parse(candidate.face_descriptor)
-                            : Array.from(candidate.face_descriptor || []);
-
-                    if (!Array.isArray(savedFace) || savedFace.length !== 128) {
-                        continue;
-                    }
-
-                    let sum = 0;
-
-                    for (let i = 0; i < 128; i++) {
-                        const savedValue = Number(savedFace[i]);
-                        const currentValue = Number(currentFace[i]);
-
-                        if (!Number.isFinite(savedValue) || !Number.isFinite(currentValue)) {
-                            continue;
-                        }
-
-                        const difference = savedValue - currentValue;
-                        sum += difference * difference;
-                    }
-
-                    const distance = Math.sqrt(sum);
-
-                    if (distance < bestDistance) {
-                        bestDistance = distance;
-                        bestMatch = candidate;
-                    }
-
-                } catch (error) {
-                    console.error("FACE MATCH CANDIDATE ERROR:", error.message);
-                }
-            }
-
-            if (bestMatch && bestDistance <= 0.6) {
-                user = bestMatch;
-                console.log(
-                    "FALLBACK FACE MATCH FOUND:",
-                    {
-                        userId: user.id,
-                        email: user.email,
-                        distance: bestDistance,
-                    }
-                );
-            }
-        }
 
         console.log(
             "USER FOUND:",
             user
         );
 
-        // ==========================================
-        // USER NOT FOUND
-        // ==========================================
-
         if (!user) {
             return res.status(401).json({
                 success: false,
                 message:
-                    "Face authentication not registered on this browser"
+                    "This email is not registered. Please register first."
             });
         }
 
-        await run(
-            `
-            UPDATE users
-            SET face_browser_id = ?
-            WHERE id = ?
-            `,
-            [browserId, user.id]
-        );
-
-        // ==========================================
-        // CHECK SAVED FACE
-        // ==========================================
+        const FACE_THRESHOLD = 0.40;
 
         if (!user.face_descriptor) {
             return res.status(401).json({
@@ -4594,10 +4296,6 @@ app.post("/face-login", async (req, res) => {
                     "Face authentication is not registered"
             });
         }
-
-        // ==========================================
-        // CONVERT SAVED FACE
-        // ==========================================
 
         let savedFace;
 
@@ -4635,10 +4333,6 @@ app.post("/face-login", async (req, res) => {
             });
         }
 
-        // ==========================================
-        // CHECK SAVED FACE ARRAY
-        // ==========================================
-
         if (!Array.isArray(savedFace)) {
 
             console.log(
@@ -4658,10 +4352,6 @@ app.post("/face-login", async (req, res) => {
             savedFace.length
         );
 
-        // ==========================================
-        // SAVED FACE MUST HAVE 128 VALUES
-        // ==========================================
-
         if (savedFace.length !== 128) {
             return res.status(500).json({
                 success: false,
@@ -4669,10 +4359,6 @@ app.post("/face-login", async (req, res) => {
                     "Saved face descriptor must contain 128 values"
             });
         }
-
-        // ==========================================
-        // CALCULATE FACE DISTANCE
-        // ==========================================
 
         let sum = 0;
 
@@ -4688,10 +4374,6 @@ app.post("/face-login", async (req, res) => {
             const currentValue =
                 Number(currentFace[i]);
 
-            // ==========================================
-            // CHECK VALUES
-            // ==========================================
-
             if (
                 !Number.isFinite(savedValue) ||
                 !Number.isFinite(currentValue)
@@ -4704,26 +4386,14 @@ app.post("/face-login", async (req, res) => {
                 });
             }
 
-            // ==========================================
-            // FIND DIFFERENCE
-            // ==========================================
-
             const difference =
                 savedValue -
                 currentValue;
-
-            // ==========================================
-            // SQUARE DIFFERENCE
-            // ==========================================
 
             sum +=
                 difference *
                 difference;
         }
-
-        // ==========================================
-        // FINAL FACE DISTANCE
-        // ==========================================
 
         const distance =
             Math.sqrt(sum);
@@ -4733,20 +4403,10 @@ app.post("/face-login", async (req, res) => {
             distance
         );
 
-        // ==========================================
-        // FACE MATCH THRESHOLD
-        // ==========================================
-
-        const FACE_THRESHOLD = 0.6;
-
         console.log(
             "FACE THRESHOLD:",
             FACE_THRESHOLD
         );
-
-        // ==========================================
-        // FACE DOES NOT MATCH
-        // ==========================================
 
         if (
             distance >
@@ -4760,13 +4420,9 @@ app.post("/face-login", async (req, res) => {
             return res.status(401).json({
                 success: false,
                 message:
-                    "Face does not match"
+                        "Face verification is not registered for this user. Please register first or use the registered face."
             });
         }
-
-        // ==========================================
-        // CREATE JWT TOKEN
-        // ==========================================
 
         const token = jwt.sign(
             {
@@ -4778,18 +4434,10 @@ app.post("/face-login", async (req, res) => {
             }
         );
 
-        // ==========================================
-        // SET AUTH COOKIE
-        // ==========================================
-
         setAuthCookies(
             res,
             token
         );
-
-        // ==========================================
-        // SUCCESS
-        // ==========================================
 
         console.log(
             "✅ FACE LOGIN SUCCESS"
@@ -4805,10 +4453,6 @@ app.post("/face-login", async (req, res) => {
         });
 
     } catch (error) {
-
-        // ==========================================
-        // FACE LOGIN ERROR
-        // ==========================================
 
         console.error(
             "================================="
@@ -4843,9 +4487,7 @@ app.post("/face-login", async (req, res) => {
 });
 
 
-/* =========================================================
-   ERROR HANDLER
-========================================================= */
+
 
 app.use(
     (err, req, res, next) => {
@@ -4864,9 +4506,7 @@ app.use(
         });
     }
 );
-/* =========================================================
-   GET NOTIFICATIONS
-========================================================= */
+
 
 app.get(
     "/notifications",
@@ -4913,9 +4553,7 @@ app.get(
         }
     }
 );
-/* =========================================================
-   START SERVER
-========================================================= */
+
 
 async function startServer() {
 
@@ -4963,9 +4601,7 @@ async function startServer() {
 
 startServer();
 
-/* =========================================================
-   PROCESS ERRORS
-========================================================= */
+
 
 process.on(
     "uncaughtException",

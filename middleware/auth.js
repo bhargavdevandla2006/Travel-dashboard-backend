@@ -37,7 +37,6 @@ function auth(req, res, next){
     }
     try{
          const decode =  jwt.verify(token, SECRET);
-         // dev debug logs
          if (process.env.NODE_ENV !== "production") {
              console.log('auth token present, decoded id=', decode.id);
          }
