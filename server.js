@@ -1320,7 +1320,7 @@ app.post(
 
             if (!user) {
                 return res.status(400).json({
-                    message: "Invalid Email",
+                    message: "You are not registered yet. Please register first.",
                 });
             }
 
