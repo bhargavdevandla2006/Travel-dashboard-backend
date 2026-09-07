@@ -1160,21 +1160,23 @@ app.post("/register", async (req, res) => {
             });
         }
 
-        if (!browserId) {
+        const hasFaceRegistration = faceDescriptor !== undefined && faceDescriptor !== null;
+
+        if (hasFaceRegistration && !browserId) {
             return res.status(400).json({
                 success: false,
                 message: "Browser identity is required for face authentication"
             });
         }
 
-        if (!Array.isArray(faceDescriptor) || faceDescriptor.length !== 128) {
+        if (hasFaceRegistration && (!Array.isArray(faceDescriptor) || faceDescriptor.length !== 128)) {
             return res.status(400).json({
                 success: false,
                 message: "Face verification is required to register"
             });
         }
 
-        if (faceDescriptor.some((value) => typeof value !== "number" || !Number.isFinite(value))) {
+        if (hasFaceRegistration && faceDescriptor.some((value) => typeof value !== "number" || !Number.isFinite(value))) {
             return res.status(400).json({
                 success: false,
                 message: "Invalid face verification data"
@@ -1213,8 +1215,8 @@ app.post("/register", async (req, res) => {
                 name,
                 email,
                 hashedPassword,
-                JSON.stringify(faceDescriptor),
-                browserId,
+                hasFaceRegistration ? JSON.stringify(faceDescriptor) : null,
+                hasFaceRegistration ? browserId : null,
             ]
         );
 
