@@ -7,6 +7,7 @@ const path = require("path");
 const dotenv = require("dotenv");
 const Razorpay = require("razorpay");
 const cookieParser = require("cookie-parser");
+const crypto = require("crypto");
 
 const auth = require("./middleware/auth");
 
@@ -1153,14 +1154,16 @@ app.post("/register", async (req, res) => {
             browserId,
         } = req.body;
 
-        if (!name || !email || !password) {
+        const hasFaceRegistration = faceDescriptor !== undefined && faceDescriptor !== null;
+
+        if (!name || !email || (!password && !hasFaceRegistration)) {
             return res.status(400).json({
                 success: false,
-                message: "Name, email and password are required"
+                message: hasFaceRegistration
+                    ? "Name and email are required"
+                    : "Name, email and password are required"
             });
         }
-
-        const hasFaceRegistration = faceDescriptor !== undefined && faceDescriptor !== null;
 
         if (hasFaceRegistration && !browserId) {
             return res.status(400).json({
@@ -1195,7 +1198,8 @@ app.post("/register", async (req, res) => {
             });
         }
 
-        const hashedPassword = await bcrypt.hash(password, 10);
+        const registrationPassword = password || crypto.randomBytes(32).toString("hex");
+        const hashedPassword = await bcrypt.hash(registrationPassword, 10);
 
         const result = await run(
             `
@@ -1819,6 +1823,31 @@ app.get(
 );
 
 
+app.get(
+    "/trips/:id",
+    async (req, res) => {
+        try {
+            const trip = await get(
+                `SELECT * FROM trips WHERE id = ? LIMIT 1`,
+                [req.params.id]
+            );
+
+            if (!trip) {
+                return res.status(404).json({
+                    message: "Trip not found",
+                });
+            }
+
+            res.json(trip);
+        } catch (error) {
+            res.status(500).json({
+                message: "Failed to fetch trip",
+            });
+        }
+    }
+);
+
+
 
 app.get(
     "/users/:id/trips",
@@ -1965,6 +1994,19 @@ app.post(
                     followerId,
                     followingId,
                 ]
+            );
+
+            const follower = await get(
+                `SELECT name FROM users WHERE id = ? LIMIT 1`,
+                [followerId]
+            );
+
+            await run(
+                `
+                INSERT INTO notifications (user_id, type, title, message, is_read, created_at)
+                VALUES (?, 'follow', 'New follower', ?, 0, datetime('now'))
+                `,
+                [followingId, `${follower?.name || "Someone"} started following you.`]
             );
 
             res.json({
@@ -4295,7 +4337,7 @@ app.post("/face-login", async (req, res) => {
             return res.status(401).json({
                 success: false,
                 message:
-                    "Face authentication is not registered"
+                    "Please enter your registered email and password to continue with face authentication."
             });
         }
 
@@ -4622,5 +4664,37 @@ process.on(
             "❌ Unhandled Rejection:",
             reason
         );
+    }
+);
+
+app.post(
+    "/notifications/read-all",
+    auth,
+    async (req, res) => {
+        try {
+            await run(
+                `UPDATE notifications SET is_read = 1 WHERE user_id = ?`,
+                [req.user.id]
+            );
+            res.json({ success: true });
+        } catch (error) {
+            res.status(500).json({ success: false, message: "Failed to update notifications" });
+        }
+    }
+);
+
+app.delete(
+    "/notifications/:id",
+    auth,
+    async (req, res) => {
+        try {
+            await run(
+                `DELETE FROM notifications WHERE id = ? AND user_id = ?`,
+                [req.params.id, req.user.id]
+            );
+            res.json({ success: true });
+        } catch (error) {
+            res.status(500).json({ success: false, message: "Failed to remove notification" });
+        }
     }
 );
